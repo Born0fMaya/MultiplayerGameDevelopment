@@ -1,0 +1,37 @@
+{
+  "revision": 4,
+  "messages": [
+    {
+      "id": "mwf92s8fr4e0au-mwf998vz",
+      "at": 1794591185471,
+      "session": "mwf92s8fr4e0au",
+      "name": "SleepSafe",
+      "color": "#d02525",
+      "text": "hello from probe 1794591185470"
+    },
+    {
+      "id": "mwf92s8fr4e0au-mwf99g5c",
+      "at": 1794591194880,
+      "session": "mwf92s8fr4e0au",
+      "name": "SleepSafe",
+      "color": "#d02525",
+      "text": "probe-1794591194880"
+    },
+    {
+      "id": "mwf9e6h2vrwac2-mwf9euyi-8fjv",
+      "at": 1794591447354,
+      "session": "mwf9e6h2vrwac2",
+      "name": "SleepSafe",
+      "color": "#d02525",
+      "text": "click-test"
+    },
+    {
+      "id": "mwf9fwfbz82d26-mwf9gcyw-qob9",
+      "at": 1794591517352,
+      "session": "mwf9fwfbz82d26",
+      "name": "SleepSafe",
+      "color": "#d02525",
+      "text": "persist-1794591517350"
+    }
+  ]
+}

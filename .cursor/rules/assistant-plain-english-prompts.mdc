@@ -1,0 +1,47 @@
+---
+description: When prompting the in-editor local AI Assistant, write exactly like the user — plain English, no coding jargon
+alwaysApply: true
+---
+
+# Local Assistant prompts sound like the user
+
+Whenever you send a message to the in-editor local AI Assistant (Ollama / Assistant window), the prompt must sound exactly like the user: a non-coder speaking plain English.
+
+## Required
+
+- Write like everyday conversation — short, direct, goal-focused.
+- Describe what you want to happen in the game or editor, not how to implement it.
+- Keep Cursor’s own audits, greps, and code checks out of the Assistant prompt. Verify privately; prompt conversationally.
+
+## Forbidden in Assistant prompts
+
+- API names, class/service names, file paths, ids (`part-8`, etc.)
+- Code, pseudocode, math/vector recipes, Enums, signal/event names
+- Implementation instructions (“flatten Y”, “LookVector”, “connect InputBegan”, “AssemblyLinearVelocity”, …)
+- Anything a person with no coding knowledge would not say
+
+## Examples
+
+```
+❌ BAD
+That still is not camera-relative. You used the Player part Orientation yaw.
+Fix the movement Script so W/A/S/D use workspace.CurrentCamera.CFrame
+look/right vectors flattened on Y (set Y to 0 then Unit).
+
+✅ GOOD
+WASD still feels wrong — I want to move based on where the camera is looking,
+not the way the player part is facing. Please fix that. Keep jump working,
+and don’t leave extra movement scripts on the Player.
+```
+
+```
+❌ BAD
+Use UIS:IsKeyDown(Enum.KeyCode.Space) with a grounded cooldown; do not call
+InputBegan inside Heartbeat.
+
+✅ GOOD
+Jump still doesn’t work when I press Space. Can you fix jumping without
+breaking the camera-based movement?
+```
+
+If a prior Assistant result was wrong, say what still feels wrong in plain language and ask them to fix it — do not dictate the technical solution in the prompt.

@@ -1,0 +1,2092 @@
+{
+  "version": 1,
+  "baseplate": null,
+  "parts": [
+    {
+      "id": "part-8",
+      "name": "Player",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 4,
+      "position": [
+        10,
+        0.5,
+        22
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "physics": {
+        "canCollide": true,
+        "enabled": true,
+        "gravity": true,
+        "gravityScale": 1,
+        "massOverride": 0,
+        "linearDamping": 0.1,
+        "angularDamping": 0.05,
+        "startAsleep": false
+      }
+    },
+    {
+      "id": "part-9",
+      "name": "Camera",
+      "shape": "camera",
+      "width": 2,
+      "height": 1.5,
+      "depth": 3,
+      "position": [
+        13,
+        5,
+        29.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#5b9dff",
+      "camera": {
+        "fieldOfView": 70,
+        "mode": "thirdPerson",
+        "turnParent": false,
+        "distance": 12,
+        "height": 2
+      }
+    },
+    {
+      "id": "part-26",
+      "name": "PlayerMovement 3",
+      "shape": "script",
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "position": [
+        10,
+        2,
+        22
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#fcfcfc",
+      "script": {
+        "enabled": true,
+        "source": "local RunService = game:GetService(\"RunService\")\nlocal UIS = game:GetService(\"UserInputService\")\nlocal character = game.Players.LocalPlayer.Character\n\nif not character then return end\ncharacter.Anchored = false\n\nlocal grounded = true\n\nRunService.Heartbeat:Connect(function(dt)\n    local camera = workspace.CurrentCamera\n    local lookVector = camera.CFrame.LookVector\n    local forward = Vector3.new(lookVector.X, 0, lookVector.Z)\n    local right = Vector3.new(-lookVector.Z, 0, lookVector.X)\n\n    local moveDir = Vector3.new(0,0,0)\n    if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + forward end\n    if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - forward end\n    if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - right end\n    if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + right end\n\n    if moveDir:Magnitude() > 0 then\n        moveDir = moveDir:Unit()\n        character.AssemblyLinearVelocity = Vector3.new(moveDir.X * 5, character.AssemblyLinearVelocity.Y, moveDir.Z * 5)\n    end\n\n    grounded = character:IsGrounded()\nend)\n\nUIS.InputBegan:Connect(function(input)\n    if input.KeyCode.Name == \"Space\" and grounded then\n        character:ApplyImpulse(Vector3.new(0, 20, 0))\n        grounded = false\n    end\nend)"
+      }
+    },
+    {
+      "id": "part-29",
+      "name": "Tile 1,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-30",
+      "name": "Tile 2,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-31",
+      "name": "Tile 3,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-32",
+      "name": "Tile 4,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-33",
+      "name": "Tile 5,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-34",
+      "name": "Tile 6,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-35",
+      "name": "Tile 7,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-36",
+      "name": "Tile 8,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-37",
+      "name": "Tile 9,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-38",
+      "name": "Tile 10,1",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-39",
+      "name": "Tile 1,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-40",
+      "name": "Tile 2,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-41",
+      "name": "Tile 3,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-42",
+      "name": "Tile 4,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-43",
+      "name": "Tile 5,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-44",
+      "name": "Tile 6,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-45",
+      "name": "Tile 7,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-46",
+      "name": "Tile 8,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-47",
+      "name": "Tile 9,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-48",
+      "name": "Tile 10,2",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-49",
+      "name": "Tile 1,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-50",
+      "name": "Tile 2,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-51",
+      "name": "Tile 3,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-52",
+      "name": "Tile 4,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-53",
+      "name": "Tile 5,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-54",
+      "name": "Tile 6,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-55",
+      "name": "Tile 7,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-56",
+      "name": "Tile 8,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-57",
+      "name": "Tile 9,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-58",
+      "name": "Tile 10,3",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-59",
+      "name": "Tile 1,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-60",
+      "name": "Tile 2,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-61",
+      "name": "Tile 3,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-62",
+      "name": "Tile 4,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-63",
+      "name": "Tile 5,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-64",
+      "name": "Tile 6,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-65",
+      "name": "Tile 7,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-66",
+      "name": "Tile 8,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-67",
+      "name": "Tile 9,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-68",
+      "name": "Tile 10,4",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-69",
+      "name": "Tile 1,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-70",
+      "name": "Tile 2,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-71",
+      "name": "Tile 3,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-72",
+      "name": "Tile 4,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-73",
+      "name": "Tile 5,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-74",
+      "name": "Tile 6,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-75",
+      "name": "Tile 7,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-76",
+      "name": "Tile 8,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-77",
+      "name": "Tile 9,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-78",
+      "name": "Tile 10,5",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-79",
+      "name": "Tile 1,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-80",
+      "name": "Tile 2,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-81",
+      "name": "Tile 3,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-82",
+      "name": "Tile 4,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-83",
+      "name": "Tile 5,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-84",
+      "name": "Tile 6,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-85",
+      "name": "Tile 7,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-86",
+      "name": "Tile 8,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-87",
+      "name": "Tile 9,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-88",
+      "name": "Tile 10,6",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        2.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-89",
+      "name": "Tile 1,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-90",
+      "name": "Tile 2,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-91",
+      "name": "Tile 3,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-92",
+      "name": "Tile 4,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-93",
+      "name": "Tile 5,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-94",
+      "name": "Tile 6,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-95",
+      "name": "Tile 7,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-96",
+      "name": "Tile 8,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-97",
+      "name": "Tile 9,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-98",
+      "name": "Tile 10,7",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-99",
+      "name": "Tile 1,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-100",
+      "name": "Tile 2,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-101",
+      "name": "Tile 3,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-102",
+      "name": "Tile 4,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-103",
+      "name": "Tile 5,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-104",
+      "name": "Tile 6,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-105",
+      "name": "Tile 7,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-106",
+      "name": "Tile 8,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-107",
+      "name": "Tile 9,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-108",
+      "name": "Tile 10,8",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-109",
+      "name": "Tile 1,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-110",
+      "name": "Tile 2,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-111",
+      "name": "Tile 3,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-112",
+      "name": "Tile 4,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-113",
+      "name": "Tile 5,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-114",
+      "name": "Tile 6,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-115",
+      "name": "Tile 7,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-116",
+      "name": "Tile 8,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-117",
+      "name": "Tile 9,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-118",
+      "name": "Tile 10,9",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-119",
+      "name": "Tile 1,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        0,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-120",
+      "name": "Tile 2,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        4,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-121",
+      "name": "Tile 3,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        8,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-122",
+      "name": "Tile 4,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        12,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-123",
+      "name": "Tile 5,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        16,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-124",
+      "name": "Tile 6,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        20,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-125",
+      "name": "Tile 7,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        24,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-126",
+      "name": "Tile 8,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        28,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-127",
+      "name": "Tile 9,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        32,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    },
+    {
+      "id": "part-128",
+      "name": "Tile 10,10",
+      "shape": "block",
+      "width": 4,
+      "height": 1,
+      "depth": 0.5,
+      "position": [
+        36,
+        0.5,
+        4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2e8b57"
+    }
+  ],
+  "nextPart": 448,
+  "folders": [],
+  "placement": {
+    "part-9": "part-8",
+    "part-26": "part-8",
+    "part-29": "baseplate",
+    "part-30": "baseplate",
+    "part-31": "baseplate",
+    "part-32": "baseplate",
+    "part-33": "baseplate",
+    "part-34": "baseplate",
+    "part-35": "baseplate",
+    "part-36": "baseplate",
+    "part-37": "baseplate",
+    "part-38": "baseplate",
+    "part-39": "baseplate",
+    "part-40": "baseplate",
+    "part-41": "baseplate",
+    "part-42": "baseplate",
+    "part-43": "baseplate",
+    "part-44": "baseplate",
+    "part-45": "baseplate",
+    "part-46": "baseplate",
+    "part-47": "baseplate",
+    "part-48": "baseplate",
+    "part-49": "baseplate",
+    "part-50": "baseplate",
+    "part-51": "baseplate",
+    "part-52": "baseplate",
+    "part-53": "baseplate",
+    "part-54": "baseplate",
+    "part-55": "baseplate",
+    "part-56": "baseplate",
+    "part-57": "baseplate",
+    "part-58": "baseplate",
+    "part-59": "baseplate",
+    "part-60": "baseplate",
+    "part-61": "baseplate",
+    "part-62": "baseplate",
+    "part-63": "baseplate",
+    "part-64": "baseplate",
+    "part-65": "baseplate",
+    "part-66": "baseplate",
+    "part-67": "baseplate",
+    "part-68": "baseplate",
+    "part-69": "baseplate",
+    "part-70": "baseplate",
+    "part-71": "baseplate",
+    "part-72": "baseplate",
+    "part-73": "baseplate",
+    "part-74": "baseplate",
+    "part-75": "baseplate",
+    "part-76": "baseplate",
+    "part-77": "baseplate",
+    "part-78": "baseplate",
+    "part-79": "baseplate",
+    "part-80": "baseplate",
+    "part-81": "baseplate",
+    "part-82": "baseplate",
+    "part-83": "baseplate",
+    "part-84": "baseplate",
+    "part-85": "baseplate",
+    "part-86": "baseplate",
+    "part-87": "baseplate",
+    "part-88": "baseplate",
+    "part-89": "baseplate",
+    "part-90": "baseplate",
+    "part-91": "baseplate",
+    "part-92": "baseplate",
+    "part-93": "baseplate",
+    "part-94": "baseplate",
+    "part-95": "baseplate",
+    "part-96": "baseplate",
+    "part-97": "baseplate",
+    "part-98": "baseplate",
+    "part-99": "baseplate",
+    "part-100": "baseplate",
+    "part-101": "baseplate",
+    "part-102": "baseplate",
+    "part-103": "baseplate",
+    "part-104": "baseplate",
+    "part-105": "baseplate",
+    "part-106": "baseplate",
+    "part-107": "baseplate",
+    "part-108": "baseplate",
+    "part-109": "baseplate",
+    "part-110": "baseplate",
+    "part-111": "baseplate",
+    "part-112": "baseplate",
+    "part-113": "baseplate",
+    "part-114": "baseplate",
+    "part-115": "baseplate",
+    "part-116": "baseplate",
+    "part-117": "baseplate",
+    "part-118": "baseplate",
+    "part-119": "baseplate",
+    "part-120": "baseplate",
+    "part-121": "baseplate",
+    "part-122": "baseplate",
+    "part-123": "baseplate",
+    "part-124": "baseplate",
+    "part-125": "baseplate",
+    "part-126": "baseplate",
+    "part-127": "baseplate",
+    "part-128": "baseplate"
+  },
+  "nextFolder": 4,
+  "revision": 531,
+  "live": false
+}

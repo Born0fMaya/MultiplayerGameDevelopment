@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --lw-bg: #111114;
+      --lw-surface: #1b1b20;
+      --lw-border: #2c2c34;
+      --lw-fg: #e6e6ea;
+      --lw-muted: #8a8a96;
+      --lw-accent: #5b9dff;
+      --lw-error: #ff6b6b;
+    }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--lw-bg);
+      color: var(--lw-fg);
+      font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    }
+    #app { min-height: 100%; }
+    #lw-overlay {
+      position: fixed; right: 12px; bottom: 12px; z-index: 2147483647;
+      max-width: min(620px, calc(100vw - 24px)); max-height: 45vh; overflow: auto;
+      background: #2a1417; color: #ffd9d9; border: 1px solid #7a2a32; border-radius: 8px;
+      padding: 8px 12px 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+      font: 12px/1.45 Consolas, "Cascadia Mono", monospace;
+    }
+    #lw-overlay header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 4px; }
+    #lw-overlay button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 16px; padding: 0 2px; }
+    #lw-overlay pre { margin: 2px 0 8px; white-space: pre-wrap; word-break: break-word; color: #ffb3b3; }
+  </style>
+  <script type="module" src="/Shell/loader.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+</body>
+</html>

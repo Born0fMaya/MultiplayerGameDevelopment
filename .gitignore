@@ -1,0 +1,32 @@
+# Build outputs
+**/bin/
+**/obj/
+*.exe
+*.dll
+*.pdb
+*.cache
+*.user
+*.suo
+*.DotSettings.user
+
+# Local GameWindow runtime / machine state
+Logs/
+*.log
+Storage/WebView2/
+Storage/ollama/
+Storage/state*.json
+Storage/storage.json
+Storage/_mcp-*
+Storage/_*.png
+Storage/_*.txt
+Storage/_*.js
+Storage/_*.mjs
+Storage/_*.lua
+Storage/_*.json
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
