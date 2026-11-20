@@ -25,6 +25,10 @@ static class CollabHost
     public static string? Error { get; private set; }
     public static string Url => $"http://0.0.0.0:{Port}/";
 
+    static string? _publicIp;
+    static DateTime _publicIpAt;
+    static readonly HttpClient PublicIpHttp = new() { Timeout = TimeSpan.FromSeconds(3) };
+
     public static void Start() => _ = Task.Run(async () =>
     {
         try { await Run(); }
@@ -49,9 +53,23 @@ static class CollabHost
 
     static string SessionsDir(string projectPath) => projectPath + ".sessions";
 
+    static bool IsPrivateOrLocal(IPAddress ip)
+    {
+        if (IPAddress.IsLoopback(ip)) return true;
+        var bytes = ip.GetAddressBytes();
+        if (bytes.Length != 4) return true;
+        // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, link-local 169.254.0.0/16,
+        // Tailscale / CGNAT 100.64.0.0/10
+        if (bytes[0] == 10) return true;
+        if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
+        if (bytes[0] == 192 && bytes[1] == 168) return true;
+        if (bytes[0] == 169 && bytes[1] == 254) return true;
+        if (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) return true;
+        return false;
+    }
+
     static IEnumerable<string> LocalAddresses()
     {
-        yield return "127.0.0.1";
         foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
         {
             if (nic.OperationalStatus != OperationalStatus.Up) continue;
@@ -63,6 +81,46 @@ static class CollabHost
                 if (!string.IsNullOrWhiteSpace(ip)) yield return ip;
             }
         }
+    }
+
+    /// <summary>LAN-style address preferred for same-house play (skip Tailscale/link-local).</summary>
+    static string? PreferredLanAddress(IEnumerable<string> addresses)
+    {
+        string? fallback = null;
+        foreach (var raw in addresses)
+        {
+            if (!IPAddress.TryParse(raw, out var ip)) continue;
+            var bytes = ip.GetAddressBytes();
+            if (bytes.Length != 4) continue;
+            if (bytes[0] == 169 && bytes[1] == 254) continue;
+            if (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) continue; // Tailscale
+            if (bytes[0] == 10 || (bytes[0] == 192 && bytes[1] == 168) ||
+                (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31))
+                return raw;
+            fallback ??= raw;
+        }
+        return fallback;
+    }
+
+    static async Task<string?> ResolvePublicIp()
+    {
+        if (!string.IsNullOrEmpty(_publicIp) && DateTime.UtcNow - _publicIpAt < TimeSpan.FromMinutes(10))
+            return _publicIp;
+        try
+        {
+            var text = (await PublicIpHttp.GetStringAsync("https://api.ipify.org")).Trim();
+            if (IPAddress.TryParse(text, out var ip) && !IsPrivateOrLocal(ip))
+            {
+                _publicIp = text;
+                _publicIpAt = DateTime.UtcNow;
+                return _publicIp;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("Could not resolve public IP for collab share: " + ex.Message);
+        }
+        return _publicIp;
     }
 
     static async Task Run()
@@ -90,7 +148,7 @@ static class CollabHost
             await next();
         });
 
-        app.MapGet("/collab/info", () =>
+        app.MapGet("/collab/info", async () =>
         {
             var path = ActivePath();
             var name = string.IsNullOrEmpty(path) ? "" : Path.GetFileNameWithoutExtension(path);
@@ -105,6 +163,11 @@ static class CollabHost
                 }
                 catch { /* ignore */ }
             }
+            var local = LocalAddresses().Distinct().ToArray();
+            var publicIp = await ResolvePublicIp();
+            var lan = PreferredLanAddress(local);
+            // What friends on the internet should type (public WAN). Same-network fallback is LAN.
+            var share = !string.IsNullOrEmpty(publicIp) ? publicIp : lan;
             return Results.Json(new
             {
                 ok = true,
@@ -114,7 +177,10 @@ static class CollabHost
                 path = string.IsNullOrEmpty(path) ? null : path,
                 revision,
                 port = Port,
-                addresses = LocalAddresses().Distinct().ToArray(),
+                publicIp,
+                lanIp = lan,
+                share,
+                addresses = local,
             });
         });
 
