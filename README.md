@@ -6,9 +6,13 @@ Shared Windows desktop editor for building multiplayer game scenes (parts, Scrip
 **Default branch:** `main`
 
 > **For AI agents (read first every session)**  
-> This README is the project map and the shared notebook between collaborators’ agents.  
+> This README is the project map and the shared notebook between collaborators’ agents — **any** agent (Cursor, Claude Desktop, custom scripts, etc.), not only Cursor.  
 > When you learn something durable (setup gotcha, architecture change, collab rule, hard “do not touch”), **update this file in the same change**.  
 > Call MCP `status` first when GameWindow is running. Prefer live MCP edits over guessing from disk alone.
+>
+> **Cursor-specific vs universal**  
+> - **Universal:** architecture, setup/build, Modules hot-reload, collab share-link flow, version bumps, and the entire MCP tool catalog against `http://127.0.0.1:5281/mcp`.  
+> - **Cursor-only conveniences:** `.cursor/mcp.json` and `.cursor/rules/` — other agents should point their own MCP client at the same URL and still follow the rules written in this README (including plain-English in-editor Assistant prompts).
 
 ---
 
