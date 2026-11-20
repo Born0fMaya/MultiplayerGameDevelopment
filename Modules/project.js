@@ -97,6 +97,26 @@ export default {
       if (/:\d+$/.test(cleaned)) return `http://${cleaned}`;
       return `http://${cleaned}:${COLLAB_PORT}`;
     };
+    // Shell is https://app.local — browser fetch() to http:// public IPs is mixed-content
+    // blocked. Talk to remote hosts through the C# HTTP bridge instead.
+    async function collabHttp(url, options = {}) {
+      const res = await api.host.http.fetch(url, {
+        method: options.method || 'GET',
+        headers: options.headers || undefined,
+        body: options.body,
+        responseType: options.responseType || 'json',
+        timeoutMs: options.timeoutMs ?? 12_000,
+      });
+      return res || { ok: false, status: 0, statusText: 'no response', body: null };
+    }
+    function collabHttpError(res, fallback) {
+      if (!res) return fallback || 'request failed';
+      if (typeof res.body === 'string' && res.body.trim()) return res.body.trim().slice(0, 200);
+      if (res.body && typeof res.body === 'object' && res.body.error) return String(res.body.error);
+      if (res.statusText) return res.statusText;
+      if (!res.status) return 'Could not reach host (timeout or blocked).';
+      return fallback || `HTTP ${res.status}`;
+    }
     const publishCollabStatus = (extra = {}) => {
       api.bus.emit('collab:status', {
         connected: !!collabRemote,
@@ -199,9 +219,9 @@ export default {
       let remote = null;
       let remoteRev = revision;
       try {
-        const res = await fetch(`${collabRemote}/collab/project`);
-        if (res.ok) {
-          remote = await res.json();
+        const res = await collabHttp(`${collabRemote}/collab/project`, { timeoutMs: 8000 });
+        if (res.ok && res.body && typeof res.body === 'object') {
+          remote = res.body;
           remoteRev = Number(remote?.revision) || 0;
         }
       } catch { /* host briefly unreachable */ }
@@ -217,18 +237,18 @@ export default {
       const body = JSON.stringify({ ...doc, revision: nextRev, live: !commit }, null, 2);
       try {
         await api.host.fs.write(filePath, body);
-        const put = await fetch(`${collabRemote}/collab/project`, {
+        const put = await collabHttp(`${collabRemote}/collab/project`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body,
+          timeoutMs: 8000,
         });
         if (!put.ok) {
           if (put.status === 409) {
             await pullSharedRemote();
             return false;
           }
-          const errText = await put.text().catch(() => '');
-          api.log(errText || `Collab put failed (${put.status})`);
+          api.log(collabHttpError(put, `Collab put failed (${put.status})`));
           return false;
         }
       } catch (err) {
@@ -285,9 +305,9 @@ export default {
       if (!alive || !collabRemote || shareTimer || pendingCommit || previewing) return;
       let raw;
       try {
-        const res = await fetch(`${collabRemote}/collab/project`);
-        if (!res.ok) return;
-        raw = await res.json();
+        const res = await collabHttp(`${collabRemote}/collab/project`, { timeoutMs: 8000 });
+        if (!res.ok || !res.body || typeof res.body !== 'object') return;
+        raw = res.body;
       } catch { return; }
       if (!alive) return;
       const next = adopt(raw);
@@ -423,7 +443,11 @@ export default {
       if (collabRemote) {
         presenceFile = '';
         try {
-          await fetch(`${collabRemote}/collab/session/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+          await collabHttp(`${collabRemote}/collab/session/${encodeURIComponent(sessionId)}`, {
+            method: 'DELETE',
+            responseType: 'text',
+            timeoutMs: 4000,
+          });
         } catch { /* host offline */ }
         return;
       }
@@ -701,17 +725,19 @@ export default {
         chat: mergeChat([lastMerged, pendingChat]),
       };
       try {
-        const res = await fetch(`${collabRemote}/collab/session/${encodeURIComponent(sessionId)}`, {
+        const res = await collabHttp(`${collabRemote}/collab/session/${encodeURIComponent(sessionId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          timeoutMs: 8000,
         });
         if (!res.ok) {
           if (res.status === 404) publishCollabStatus({ error: 'Host has no project open.' });
           return;
         }
         if (stale()) return;
-        const data = await res.json();
+        const data = res.body && typeof res.body === 'object' ? res.body : null;
+        if (!data) return;
         if (stale()) return;
         const people = [];
         const chatLists = [lastMerged, pendingChat];
@@ -787,11 +813,18 @@ export default {
       publishCollabStatus({ connecting: true, error: '', host: hostInput });
       let info;
       try {
-        const res = await fetch(`${base}/collab/info`);
-        if (!res.ok) throw new Error(`Could not reach ${base}`);
-        info = await res.json();
+        const res = await collabHttp(`${base}/collab/info`, { timeoutMs: 10_000 });
+        if (!res.ok) {
+          throw new Error(collabHttpError(res, `Could not reach ${base}`));
+        }
+        info = res.body && typeof res.body === 'object' ? res.body : null;
       } catch (err) {
-        publishCollabStatus({ error: err?.message || 'Could not reach that host.' });
+        const msg = err?.message || 'Could not reach that host.';
+        publishCollabStatus({
+          error: /timeout|canceled|reach|connect/i.test(msg)
+            ? `${msg} If this is a public IP, the host needs router port-forward TCP 5282.`
+            : msg,
+        });
         return false;
       }
       if (!info?.ok) {
@@ -800,15 +833,21 @@ export default {
       }
       let raw;
       try {
-        const res = await fetch(`${base}/collab/project`);
+        const res = await collabHttp(`${base}/collab/project`, { timeoutMs: 15_000 });
         if (!res.ok) {
-          const msg = res.status === 404 ? 'Host has no project open yet.' : `Host project failed (${res.status}).`;
+          const msg = res.status === 404
+            ? 'Host has no project open yet.'
+            : collabHttpError(res, `Host project failed (${res.status}).`);
           publishCollabStatus({ error: msg });
           return false;
         }
-        raw = await res.json();
+        raw = res.body && typeof res.body === 'object' ? res.body : null;
       } catch (err) {
         publishCollabStatus({ error: err?.message || 'Could not download the project.' });
+        return false;
+      }
+      if (!raw) {
+        publishCollabStatus({ error: 'Host sent an empty project.' });
         return false;
       }
       const next = adopt(raw);

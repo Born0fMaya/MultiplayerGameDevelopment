@@ -78,6 +78,10 @@ Key pieces:
 
 Endpoints (host): `/collab/info`, `/collab/project`, `/collab/session/{id}`
 
+Guest connections use the host HTTP bridge (`api.host.http.fetch`), not browser `fetch`, because the shell is `https://app.local` and Chromium blocks mixed-content `http://` calls to public IPs.
+
+**Public internet:** host must port-forward TCP **5282** on the router to the host PC. Without that, Connect times out even after the mixed-content fix.
+
 ---
 
 ## Agent rules (both collaborators)
