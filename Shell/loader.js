@@ -341,13 +341,33 @@ async function fallbackCheck() {
   };
 }
 
+function missingGitMessage(err) {
+  const text = String(err?.message || err || '');
+  if (/cannot find the file|not found|No such file/i.test(text) && /git/i.test(text)) {
+    return 'Git was not found on this PC. Install Git for Windows (git-scm.com) or GitHub Desktop, restart GameWindow, then try Update again. Newer builds can also update from GitHub without git.';
+  }
+  return text;
+}
+
 async function fallbackUpdate() {
   const info = await call('host.info');
   const root = await resolveGitRoot(info?.root);
   if (!root) throw new Error('Program folder unknown.');
-  const before = await gitExec(root, ['rev-parse', 'HEAD'], 30_000);
-  if ((before?.exitCode ?? 1) !== 0) throw new Error((before?.stderr || before?.stdout || 'Not a git repo.').trim());
-  const pull = await gitExec(root, ['pull', '--ff-only'], 120_000);
+  let before;
+  try {
+    before = await gitExec(root, ['rev-parse', 'HEAD'], 30_000);
+  } catch (err) {
+    throw new Error(missingGitMessage(err));
+  }
+  if ((before?.exitCode ?? 1) !== 0) {
+    throw new Error(missingGitMessage({ message: (before?.stderr || before?.stdout || 'Not a git repo.').trim() }));
+  }
+  let pull;
+  try {
+    pull = await gitExec(root, ['pull', '--ff-only'], 120_000);
+  } catch (err) {
+    throw new Error(missingGitMessage(err));
+  }
   if (pull?.timedOut) throw new Error('git pull timed out.');
   if ((pull?.exitCode ?? 1) !== 0) {
     throw new Error((pull?.stderr || pull?.stdout || 'git pull failed.').trim().split(/\r?\n/).find(Boolean) || 'git pull failed.');
@@ -429,7 +449,7 @@ async function runUpdate() {
     showVersion();
     if (!result.reloaded) await refreshUpdateStatus();
   } catch (err) {
-    const msg = String(err?.message || err || 'Update failed.');
+    const msg = missingGitMessage(err) || String(err?.message || err || 'Update failed.');
     setUpdateState('error', 'Update failed', msg);
     console.error('Update failed', err);
     try { await call('notify', 'Update failed', msg); } catch { /* optional */ }
