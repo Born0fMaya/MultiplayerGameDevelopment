@@ -613,7 +613,7 @@ export default {
     panel.style.cssText = [
       'position:fixed',
       'z-index:40',
-      'width:240px',
+      'width:280px',
       'box-sizing:border-box',
       'padding:12px',
       'flex-direction:column',
@@ -656,16 +656,22 @@ export default {
     colorInput.value = myColor;
     colorInput.style.cssText = 'width:100%;height:32px;padding:0;border:0;background:transparent;cursor:pointer;';
     colorLabel.append(colorInput);
-    const ipLabel = addLabel('Host IP');
+    const ipLabel = addLabel('Friend’s share link or IP');
     const ipInput = document.createElement('input');
     ipInput.type = 'text';
-    ipInput.placeholder = '10.0.0.12';
+    ipInput.placeholder = 'Paste their share link to join';
     ipInput.spellcheck = false;
     ipInput.autocomplete = 'off';
     ipInput.style.cssText = fieldStyle;
     try {
-      const savedHost = localStorage.getItem('gw-collab-host');
-      if (savedHost) ipInput.value = savedHost;
+      const savedHost = localStorage.getItem('gw-collab-host') || '';
+      // Ignore stale truncated tunnel hostnames (must be a full https share link or IP).
+      const usable = savedHost
+        && (/^https?:\/\//i.test(savedHost)
+          || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(savedHost)
+          || /\.trycloudflare\.com$/i.test(savedHost));
+      if (usable) ipInput.value = savedHost;
+      else if (savedHost) localStorage.removeItem('gw-collab-host');
     } catch { /* private mode */ }
     ipLabel.append(ipInput);
     const connectBtn = document.createElement('button');
@@ -684,8 +690,23 @@ export default {
     const collabStatus = document.createElement('div');
     collabStatus.style.cssText = 'font-size:11px;line-height:1.35;color:var(--gw-muted, #aeb4bb);min-height:14px;';
     const yourIp = document.createElement('div');
-    yourIp.style.cssText = 'font-size:11px;line-height:1.35;color:var(--gw-muted, #aeb4bb);word-break:break-all;';
-    yourIp.textContent = 'Your IP: …';
+    yourIp.style.cssText = 'font-size:11px;line-height:1.35;color:var(--gw-muted, #aeb4bb);word-break:break-all;white-space:pre-wrap;user-select:text;cursor:text;';
+    yourIp.textContent = 'Your share link: …';
+    const copyShareBtn = document.createElement('button');
+    copyShareBtn.type = 'button';
+    copyShareBtn.textContent = 'Copy share link';
+    copyShareBtn.hidden = true;
+    copyShareBtn.style.cssText = [
+      'width:100%',
+      'height:28px',
+      'border:1px solid var(--gw-line, rgba(255,255,255,.12))',
+      'border-radius:4px',
+      'background:transparent',
+      'color:inherit',
+      'font:12px/1 var(--gw-font, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif)',
+      'cursor:pointer',
+    ].join(';');
+    let latestShare = '';
     let collabConnected = false;
     let collabBusy = false;
     const showCollab = (status = {}) => {
@@ -694,33 +715,48 @@ export default {
       connectBtn.textContent = collabConnected ? 'Disconnect' : (connecting ? 'Connecting…' : 'Connect');
       connectBtn.disabled = connecting || collabBusy;
       ipInput.disabled = collabConnected || connecting;
-      if (status.host && !ipInput.value) ipInput.value = status.host;
+      // Never overwrite the join field with our own share link.
       if ('error' in status || 'connected' in status || 'connecting' in status) {
         if (status.error) collabStatus.textContent = status.error;
         else if (collabConnected) collabStatus.textContent = `Connected to ${status.host || 'host'}`;
         else if (connecting) collabStatus.textContent = 'Connecting…';
-        else collabStatus.textContent = 'Open a project, then share your IP with friends.';
+        else collabStatus.textContent = 'Open a project, then send your share link to friends.';
       }
       const port = status.port || 5282;
-      const share = status.share || status.tunnelUrl || status.publicIp || status.lanIp || '';
+      // Prefer live tunnel URL so guests always get a reachable address.
+      const share = status.tunnelUrl || status.share || status.publicIp || status.lanIp || '';
+      latestShare = share;
       if (share) {
         const isUrl = /^https?:\/\//i.test(share);
-        yourIp.textContent = isUrl ? `Share link: ${share}` : `Your IP: ${share}:${port}`;
-        yourIp.title = status.tunnelUrl
-          ? 'Cloudflare share link — send this to friends (no router port-forward needed).'
-          : status.publicIp
-            ? 'Public IP — needs router port-forward of TCP 5282.'
-            : 'Local network IP — only works on the same Wi‑Fi/LAN.';
-        if (isUrl && !ipInput.value) ipInput.placeholder = share.replace(/^https?:\/\//i, '');
+        yourIp.textContent = isUrl ? `Send this to friends:\n${share}` : `Send this to friends:\n${share}:${port}`;
+        yourIp.title = 'Click Copy share link — this is what guests paste to join.';
+        copyShareBtn.hidden = false;
+        copyShareBtn.disabled = false;
+      } else if (status.tunnelError) {
+        yourIp.textContent = 'Share link: starting tunnel…';
+        copyShareBtn.hidden = true;
       } else if (Array.isArray(status.addresses) && status.addresses.length) {
         const best = status.addresses.find((ip) => ip && ip !== '127.0.0.1' && !/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip))
           || status.addresses.find((ip) => ip && ip !== '127.0.0.1')
           || status.addresses[0];
-        yourIp.textContent = `Your IP: ${best}:${port}`;
-      } else if (status.tunnelError) {
-        yourIp.textContent = 'Share link: starting…';
+        yourIp.textContent = `Send this to friends:\n${best}:${port}`;
+        latestShare = `${best}:${port}`;
+        copyShareBtn.hidden = false;
+      } else {
+        yourIp.textContent = 'Share link: waiting…';
+        copyShareBtn.hidden = true;
       }
     };
+    copyShareBtn.addEventListener('click', async () => {
+      if (!latestShare) return;
+      try {
+        await navigator.clipboard.writeText(latestShare);
+        copyShareBtn.textContent = 'Copied!';
+        setTimeout(() => { copyShareBtn.textContent = 'Copy share link'; }, 1500);
+      } catch {
+        collabStatus.textContent = 'Could not copy — select the link text above.';
+      }
+    });
     const refreshShareInfo = () => {
       api.host.http.fetch('http://127.0.0.1:5282/collab/info', {
         responseType: 'json',
@@ -737,15 +773,16 @@ export default {
           tunnelError: info.tunnelError,
           share: info.share,
         });
-      }).catch(() => { yourIp.textContent = 'Your IP: unavailable'; });
+      }).catch(() => { yourIp.textContent = 'Share link: unavailable'; });
     };
     api.bus.on('collab:status', showCollab);
     api.bus.emit('collab:request');
     refreshShareInfo();
-    // Tunnel URL appears a few seconds after launch.
+    // Tunnel URL appears a few seconds after launch; keep refreshing briefly.
     setTimeout(refreshShareInfo, 2500);
     setTimeout(refreshShareInfo, 6000);
     setTimeout(refreshShareInfo, 12000);
+    setTimeout(refreshShareInfo, 20000);
     connectBtn.addEventListener('click', () => {
       if (collabBusy) return;
       if (collabConnected) {
@@ -770,12 +807,12 @@ export default {
         connectBtn.click();
       }
     });
-    panel.append(nameLabel, colorLabel, ipLabel, connectBtn, yourIp, collabStatus);
+    panel.append(nameLabel, colorLabel, yourIp, copyShareBtn, ipLabel, connectBtn, collabStatus);
     document.body.append(panel);
     const placePanel = () => {
       const rect = users.getBoundingClientRect();
       panel.style.top = `${rect.bottom + 6}px`;
-      panel.style.left = `${Math.max(8, rect.right - 240)}px`;
+      panel.style.left = `${Math.max(8, rect.right - 280)}px`;
     };
     const setPanel = (open) => {
       panel.hidden = !open;

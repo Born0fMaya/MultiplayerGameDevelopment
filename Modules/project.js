@@ -91,9 +91,15 @@ export default {
     const collabBase = (host) => {
       const raw = String(host || '').trim();
       if (!raw) return '';
+      // Full share links (Cloudflare tunnel) — keep https, no :5282 suffix.
       if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, '');
-      const cleaned = raw.replace(/^\/+|\/+$/g, '');
+      let cleaned = raw.replace(/^\/+|\/+$/g, '');
       if (!cleaned) return '';
+      // Hostname-only tunnel links people may paste without the scheme.
+      if (/\.trycloudflare\.com$/i.test(cleaned.split('/')[0].split(':')[0])) {
+        const hostOnly = cleaned.replace(/:\d+$/, '').replace(/\/+$/, '');
+        return `https://${hostOnly}`;
+      }
       if (/:\d+$/.test(cleaned)) return `http://${cleaned}`;
       return `http://${cleaned}:${COLLAB_PORT}`;
     };

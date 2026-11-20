@@ -65,10 +65,10 @@ Do **not** commit: `bin/`, `obj/`, `*.exe`, `Logs/`, most of `Storage/`, `publis
 
 Local shared-folder collab is replaced by **IP + Connect**:
 
-1. Host opens a project in GameWindow.
-2. Host opens the presence menu (username/color) — note **Your IP** (port **5282**).
-3. Guest enters that IP and clicks **Connect**.
-4. Guests sync project + presence over HTTP (`CollabHost`).
+1. Host opens a project in GameWindow (bundled `Tools/cloudflared.exe` starts automatically).
+2. Host opens the presence menu — copy **Send this to friends** (Cloudflare share link). Do not use the join field for your own link.
+3. Guest pastes that full `https://….trycloudflare.com` link into **Friend’s share link or IP** and clicks **Connect**.
+4. Guests sync project + presence over HTTP through the host bridge (`CollabHost` + tunnel).
 
 Key pieces:
 
