@@ -22,8 +22,74 @@
       font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     }
     #app { min-height: 100%; }
+    #gw-version-bar {
+      position: fixed;
+      right: 10px;
+      bottom: 6px;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      color: var(--lw-muted);
+      font: 11px/1 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      letter-spacing: 0.02em;
+      user-select: none;
+      opacity: 0.9;
+    }
+    #gw-version {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      letter-spacing: inherit;
+      pointer-events: none;
+    }
+    #gw-update-status {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      letter-spacing: inherit;
+      pointer-events: none;
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #gw-version-bar[data-state="ok"] #gw-update-status { color: #7dcea0; }
+    #gw-version-bar[data-state="outdated"] #gw-update-status { color: #f0c674; }
+    #gw-version-bar[data-state="error"] #gw-update-status { color: #ffb3b3; }
+    #gw-version-bar[data-state="checking"] #gw-update-status { color: var(--lw-muted); }
+    #gw-update {
+      margin: 0;
+      padding: 2px 7px;
+      border: 1px solid var(--lw-border);
+      border-radius: 4px;
+      background: var(--lw-surface);
+      color: var(--lw-fg);
+      font: inherit;
+      letter-spacing: inherit;
+      cursor: pointer;
+      opacity: 0.95;
+    }
+    #gw-update:hover { border-color: var(--lw-accent); color: #fff; }
+    #gw-update:disabled {
+      cursor: default;
+      opacity: 0.55;
+      border-color: var(--lw-border);
+      color: var(--lw-muted);
+    }
+    #gw-version-bar[data-state="error"] #gw-update { border-color: var(--lw-error); color: #ffd9d9; }
+    #gw-version-bar[data-state="ok"] #gw-update { border-color: #3d8f5a; }
+    #gw-version-bar[data-state="outdated"] #gw-update { border-color: #c9a227; color: #ffe9a8; }
     #lw-overlay {
-      position: fixed; right: 12px; bottom: 12px; z-index: 2147483647;
+      position: fixed; right: 12px; bottom: 28px; z-index: 2147483647;
       max-width: min(620px, calc(100vw - 24px)); max-height: 45vh; overflow: auto;
       background: #2a1417; color: #ffd9d9; border: 1px solid #7a2a32; border-radius: 8px;
       padding: 8px 12px 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
@@ -37,5 +103,10 @@
 </head>
 <body>
   <div id="app"></div>
+  <div id="gw-version-bar" aria-label="App version" data-state="checking">
+    <span id="gw-version">…</span>
+    <span id="gw-update-status">Checking…</span>
+    <button id="gw-update" type="button" title="Pull the latest changes and reload">Update</button>
+  </div>
 </body>
 </html>

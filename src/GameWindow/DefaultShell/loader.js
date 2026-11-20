@@ -266,7 +266,192 @@ window.__lw = {
   disposeAll() { for (const name of [...records.keys()]) unmount(name); },
 };
 
+async function showVersion() {
+  const el = document.getElementById('gw-version');
+  if (!el) return;
+  try {
+    const info = await call('host.info');
+    const ver = info?.version ? String(info.version) : '';
+    el.textContent = ver ? `v${ver}` : '';
+    el.title = ver ? `GameWindow ${ver}` : '';
+  } catch {
+    el.textContent = '';
+  }
+}
+
+function setUpdateState(state, label, title) {
+  const bar = document.getElementById('gw-version-bar');
+  const status = document.getElementById('gw-update-status');
+  const btn = document.getElementById('gw-update');
+  if (bar) bar.dataset.state = state || '';
+  if (status && label != null) status.textContent = label;
+  const tip = title ?? label;
+  if (status && tip) status.title = tip;
+  if (btn && tip) btn.title = tip;
+}
+
+async function gitExec(root, args, timeoutMs = 60_000) {
+  return call('process.exec', 'git', args, { cwd: root, timeoutMs });
+}
+
+async function resolveGitRoot(root) {
+  const top = await gitExec(root, ['rev-parse', '--show-toplevel'], 15_000);
+  if ((top?.exitCode ?? 1) === 0) {
+    const path = String(top.stdout || '').trim();
+    if (path) return path;
+  }
+  return root;
+}
+
+async function fallbackCheck() {
+  const info = await call('host.info');
+  const root = await resolveGitRoot(info?.root);
+  if (!root) throw new Error('Program folder unknown.');
+  const head = await gitExec(root, ['rev-parse', 'HEAD'], 15_000);
+  if ((head?.exitCode ?? 1) !== 0) throw new Error((head?.stderr || head?.stdout || 'Not a git repo.').trim());
+  let upstream = '';
+  const tracked = await gitExec(root, ['rev-parse', '--abbrev-ref', '@{u}'], 15_000);
+  if ((tracked?.exitCode ?? 1) === 0) upstream = String(tracked.stdout || '').trim();
+  if (!upstream) {
+    const branch = await gitExec(root, ['rev-parse', '--abbrev-ref', 'HEAD'], 15_000);
+    const name = String(branch?.stdout || '').trim();
+    upstream = name && name !== 'HEAD' ? `origin/${name}` : 'origin/main';
+  }
+  const remoteName = upstream.includes('/') ? upstream.split('/')[0] : 'origin';
+  const fetched = await gitExec(root, ['fetch', '--quiet', '--prune', remoteName], 60_000);
+  if (fetched?.timedOut) throw new Error('git fetch timed out.');
+  if ((fetched?.exitCode ?? 1) !== 0) {
+    throw new Error((fetched?.stderr || fetched?.stdout || 'git fetch failed.').trim().split(/\r?\n/).find(Boolean) || 'git fetch failed.');
+  }
+  const behindRun = await gitExec(root, ['rev-list', '--count', `HEAD..${upstream}`], 15_000);
+  const aheadRun = await gitExec(root, ['rev-list', '--count', `${upstream}..HEAD`], 15_000);
+  const behind = Number.parseInt(String(behindRun?.stdout || '0').trim(), 10) || 0;
+  const ahead = Number.parseInt(String(aheadRun?.stdout || '0').trim(), 10) || 0;
+  const latest = behind === 0;
+  return {
+    ok: true,
+    latest,
+    outdated: !latest,
+    behind,
+    ahead,
+    upstream,
+    message: latest
+      ? (ahead > 0 ? `Latest remote — ${ahead} local commit(s) not pushed.` : "You're on the latest version.")
+      : `Update available — ${behind} commit(s) behind.`,
+  };
+}
+
+async function fallbackUpdate() {
+  const info = await call('host.info');
+  const root = await resolveGitRoot(info?.root);
+  if (!root) throw new Error('Program folder unknown.');
+  const before = await gitExec(root, ['rev-parse', 'HEAD'], 30_000);
+  if ((before?.exitCode ?? 1) !== 0) throw new Error((before?.stderr || before?.stdout || 'Not a git repo.').trim());
+  const pull = await gitExec(root, ['pull', '--ff-only'], 120_000);
+  if (pull?.timedOut) throw new Error('git pull timed out.');
+  if ((pull?.exitCode ?? 1) !== 0) {
+    throw new Error((pull?.stderr || pull?.stdout || 'git pull failed.').trim().split(/\r?\n/).find(Boolean) || 'git pull failed.');
+  }
+  const after = await gitExec(root, ['rev-parse', 'HEAD'], 30_000);
+  const beforeHash = String(before?.stdout || '').trim();
+  const afterHash = String(after?.stdout || '').trim();
+  const text = `${pull?.stdout || ''}\n${pull?.stderr || ''}`;
+  if (beforeHash === afterHash || /Already up to date/i.test(text)) {
+    return { ok: true, updated: false, reloaded: false, needsRestart: false, latest: true, outdated: false, behind: 0, message: "You're on the latest version." };
+  }
+  location.reload();
+  return { ok: true, updated: true, reloaded: true, needsRestart: false, latest: true, outdated: false, behind: 0, message: 'Updated and reloaded.' };
+}
+
+function applyStatusResult(result) {
+  if (!result?.ok) {
+    const msg = result?.error || result?.message || 'Could not check for updates.';
+    setUpdateState('error', 'Check failed', msg);
+    return;
+  }
+  if (result.outdated || result.latest === false) {
+    const behind = Number(result.behind) || 0;
+    const label = behind > 0 ? `Outdated · ${behind} behind` : 'Outdated';
+    setUpdateState('outdated', label, result.message || label);
+    return;
+  }
+  setUpdateState('ok', 'Latest', result.message || "You're on the latest version.");
+}
+
+let checkBusy = false;
+async function refreshUpdateStatus() {
+  if (checkBusy) return;
+  checkBusy = true;
+  setUpdateState('checking', 'Checking…', 'Checking for updates…');
+  try {
+    let result;
+    try {
+      result = await call('app.update.check');
+    } catch (err) {
+      if (!/Unknown host method/i.test(String(err?.message || err))) throw err;
+      result = await fallbackCheck();
+    }
+    applyStatusResult(result);
+  } catch (err) {
+    const msg = String(err?.message || err || 'Could not check for updates.');
+    setUpdateState('error', 'Check failed', msg);
+    console.warn('Update check failed', err);
+  } finally {
+    checkBusy = false;
+  }
+}
+
+async function runUpdate() {
+  const btn = document.getElementById('gw-update');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = 'Updating…';
+  setUpdateState('checking', 'Updating…', 'Pulling latest changes…');
+  try {
+    let result;
+    try {
+      result = await call('app.update');
+    } catch (err) {
+      if (!/Unknown host method/i.test(String(err?.message || err))) throw err;
+      result = await fallbackUpdate();
+    }
+    if (!result?.ok) throw new Error(result?.error || result?.message || 'Update failed.');
+    const msg = result.message || (result.updated ? 'Updated.' : "You're on the latest version.");
+    if (result.latest || result.updated || result.outdated === false) {
+      setUpdateState('ok', 'Latest', msg);
+    } else {
+      applyStatusResult(result);
+    }
+    if (result.updated && !result.reloaded && result.needsRestart) {
+      try { await call('notify', 'Update', msg); } catch { /* optional */ }
+    }
+    showVersion();
+    if (!result.reloaded) await refreshUpdateStatus();
+  } catch (err) {
+    const msg = String(err?.message || err || 'Update failed.');
+    setUpdateState('error', 'Update failed', msg);
+    console.error('Update failed', err);
+    try { await call('notify', 'Update failed', msg); } catch { /* optional */ }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev || 'Update';
+  }
+}
+
+function wireUpdateButton() {
+  const btn = document.getElementById('gw-update');
+  if (!btn || btn.dataset.wired) return;
+  btn.dataset.wired = '1';
+  btn.addEventListener('click', () => { void runUpdate(); });
+}
+
 async function start() {
+  showVersion();
+  wireUpdateButton();
+  void refreshUpdateStatus();
+  setInterval(() => { void refreshUpdateStatus(); }, 5 * 60_000);
+
   let list = [];
   try { list = await call('modules.list'); }
   catch (err) { console.error('Could not list modules', err); }

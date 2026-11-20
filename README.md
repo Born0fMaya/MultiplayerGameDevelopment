@@ -22,7 +22,7 @@ Shared Windows desktop editor for building multiplayer game scenes (parts, Scrip
 - **Features:** ES modules under `Modules/` (viewport, explorer, toolbar, project, assistant, …). Edit them on disk or via MCP; they **hot-reload** without restarting the exe.
 - **Live Mode:** Play/Stop in the toolbar; Lua scripts run in the viewport runtime.
 - **Online collab:** Host shares a Cloudflare tunnel link; guests Connect with that link (no router port-forward required).
-- **Version badge:** Bottom-right of the UI shows `vX.Y.Z` from `<Version>` in `src/GameWindow/GameWindow.csproj`. **Bump this on every patch**, then rebuild/restart the host so the badge updates.
+- **Version badge + Update:** Bottom-right shows `vX.Y.Z` from `<Version>` in `src/GameWindow/GameWindow.csproj`, a live **Latest / Outdated** status (git fetch vs upstream), and an **Update** button that `git pull --ff-only`s and hot-reloads when possible. **Bump Version on every patch**, then rebuild/restart so the badge/`app.update` host methods stay current.
 
 ### Ports
 
@@ -364,7 +364,9 @@ Children are killed when GameWindow closes (job object).
 | Module error overlay | `get_errors`, `revert_module` / fix + `reload_module` |
 | Page frozen | `reset_webview` (then `hard=true` if needed) |
 | Guest Connect timeout | Host must have project open; send **current** tunnel share link; guest on latest code (host HTTP bridge) |
+| Guest transforms snap back / lost inserts | Fixed through 1.1.5: last-claimer locks, claim-through-locks, unique collab part ids, merge-on-conflict rebase, commits must advance revision (live may rewrite same rev). Both sides need latest Modules + host rebuild for CollabHost. |
 | Share link missing in UI | Wait a few seconds for tunnel; check `host_log` for “Collab tunnel ready” |
 | `GameWindow.exe` locked on copy | Fully quit the app (not only kill renderer), then publish/copy |
 | Version badge wrong | Bump csproj Version, republish, restart |
+| Want latest from git | Bottom-right status shows **Latest** or **Outdated**; **Update** runs `git pull --ff-only` and hot-reloads Modules/Shell/Assets; restart if native/C# files changed (`app.update` / `app.update.check` in 1.1.4+, else Shell falls back to `process.exec`) |
 | Path with spaces + `--root` | Quote the root path in ProcessStartInfo / PowerShell |

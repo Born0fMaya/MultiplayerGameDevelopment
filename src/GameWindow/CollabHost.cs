@@ -217,11 +217,14 @@ static class CollabHost
                 return Results.Json(new { ok = false, error = "Empty body." }, statusCode: 400);
 
             long incomingRev = 0;
+            bool incomingLive = false;
             try
             {
                 using var parsed = JsonDocument.Parse(body);
                 if (parsed.RootElement.TryGetProperty("revision", out var rev) && rev.ValueKind == JsonValueKind.Number)
                     incomingRev = rev.GetInt64();
+                if (parsed.RootElement.TryGetProperty("live", out var live) && live.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    incomingLive = live.GetBoolean();
             }
             catch (Exception ex)
             {
@@ -241,7 +244,9 @@ static class CollabHost
                     }
                     catch { /* overwrite broken file */ }
                 }
-                if (incomingRev < currentRev)
+                // Live soft-updates may rewrite the same revision; commits must strictly advance
+                // so concurrent guest/host saves cannot silently clobber each other.
+                if (incomingRev < currentRev || (incomingRev == currentRev && !incomingLive))
                     return Results.Json(new { ok = false, error = "Stale revision.", revision = currentRev }, statusCode: 409);
 
                 var dir = Path.GetDirectoryName(path);

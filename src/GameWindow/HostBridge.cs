@@ -175,6 +175,10 @@ sealed class HostBridge
         // used by the loader
         Sync("modules.list", _ => Host.Modules.Names().Select(Host.Modules.Info).ToArray());
         Sync("modules.info", a => Host.Modules.Info(a.Str(0)));
+
+        // git status / pull + hot reload when Modules/Shell/Assets change; native changes still need a restart
+        Async("app.update", async _ => await AppUpdate.RunAsync());
+        Async("app.update.check", async _ => await AppUpdate.CheckAsync());
     }
 
     void Sync(string name, Func<BridgeArgs, object?> fn) => _handlers[name] = a => Task.FromResult(fn(a));

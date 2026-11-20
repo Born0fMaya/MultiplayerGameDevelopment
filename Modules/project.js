@@ -173,6 +173,78 @@ export default {
       return run;
     }
 
+    function iOwn(kind) {
+      return !!kind && mySelection.some((claim) => claim.id === kind);
+    }
+
+    function clonePart(part) {
+      return part ? JSON.parse(JSON.stringify(part)) : null;
+    }
+
+    // Keep our in-flight inserts + claimed transforms when another peer saved first.
+    function rebaseLocalOnto(remoteRaw) {
+      const remoteDoc = adopt(remoteRaw);
+      if (!remoteDoc) return false;
+      const claimed = new Set(mySelection.map((claim) => claim.id));
+      const remoteById = new Map();
+      for (const part of remoteDoc.parts || []) {
+        if (part?.id) remoteById.set(part.id, part);
+      }
+      const merged = [];
+      const seen = new Set();
+      for (const part of remoteDoc.parts || []) {
+        if (!part?.id) continue;
+        const local = (doc.parts || []).find((item) => item.id === part.id);
+        if (local && claimed.has(part.id)) merged.push(clonePart(local));
+        else merged.push(clonePart(part));
+        seen.add(part.id);
+      }
+      for (const part of doc.parts || []) {
+        if (!part?.id || seen.has(part.id)) continue;
+        merged.push(clonePart(part));
+        seen.add(part.id);
+      }
+      const placement = { ...(remoteDoc.placement || {}), ...(doc.placement || {}) };
+      for (const key of Object.keys(placement)) {
+        if (key !== 'baseplate' && !seen.has(key) && !String(key).startsWith('folder-')) delete placement[key];
+      }
+      let nextPart = Math.max(Number(doc.nextPart) || 1, Number(remoteDoc.nextPart) || 1);
+      for (const id of seen) {
+        const match = /^part-(\d+)$/.exec(id);
+        if (match) nextPart = Math.max(nextPart, Number(match[1]) + 1);
+      }
+      const folderMap = new Map();
+      for (const folder of remoteDoc.folders || []) if (folder?.id) folderMap.set(folder.id, folder);
+      for (const folder of doc.folders || []) if (folder?.id) folderMap.set(folder.id, folder);
+      doc = {
+        version: 1,
+        baseplate: claimed.has('baseplate') && doc.baseplate ? clonePart(doc.baseplate) : (remoteDoc.baseplate ?? doc.baseplate),
+        parts: merged,
+        nextPart,
+        folders: [...folderMap.values()],
+        placement,
+        nextFolder: Math.max(Number(doc.nextFolder) || 1, Number(remoteDoc.nextFolder) || 1),
+      };
+      return true;
+    }
+
+    function allocPartId() {
+      if (!Array.isArray(doc.parts)) doc.parts = [];
+      const used = new Set(doc.parts.map((part) => part.id));
+      let n = Number.isFinite(doc.nextPart) && doc.nextPart >= 1 ? doc.nextPart : 1;
+      while (used.has(`part-${n}`)) n += 1;
+      if (collabRemote) {
+        let id = '';
+        do {
+          id = `part-${sessionId.slice(0, 5)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        } while (used.has(id));
+        doc.nextPart = Math.max(n, doc.nextPart || 1);
+        return id;
+      }
+      doc.nextPart = n + 1;
+      return `part-${n}`;
+    }
+
     async function flushShare(commit) {
       if (!alive || !filePath) return false;
       if (collabRemote) return flushShareRemote(commit);
@@ -189,10 +261,19 @@ export default {
       if (remote && remoteRev > revision) {
         const next = adopt(remote);
         if (next && snap(next) !== shot) {
-          takeShared(next, remoteRev, !!remote.live);
-          return true;
+          const localBusy = previewing || pendingCommit || shot !== lastShared;
+          if (localBusy) {
+            rebaseLocalOnto(remote);
+            revision = Math.max(revision, remoteRev);
+          } else {
+            takeShared(next, remoteRev, !!remote.live);
+            return true;
+          }
+        } else {
+          revision = Math.max(revision, remoteRev);
         }
       }
+      const mergedShot = snap(doc);
       const nextRev = commit ? Math.max(revision, remoteRev) + 1 : Math.max(revision, remoteRev);
       const tmp = `${filePath}.${Date.now()}.tmp`;
       try {
@@ -209,8 +290,8 @@ export default {
       }
       if (!alive) return false;
       revision = nextRev;
-      lastShared = shot;
-      saved = shot;
+      lastShared = mergedShot;
+      saved = mergedShot;
       if (commit) previewing = false;
       return true;
     }
@@ -232,10 +313,20 @@ export default {
       if (remote && remoteRev > revision) {
         const next = adopt(remote);
         if (next && snap(next) !== shot) {
-          takeShared(next, remoteRev, !!remote.live);
-          return true;
+          // Keep local inserts / claimed edits, then push a merged document.
+          const localBusy = previewing || pendingCommit || shot !== lastShared;
+          if (localBusy) {
+            rebaseLocalOnto(remote);
+            revision = Math.max(revision, remoteRev);
+          } else {
+            takeShared(next, remoteRev, !!remote.live);
+            return true;
+          }
+        } else {
+          revision = Math.max(revision, remoteRev);
         }
       }
+      const mergedShot = snap(doc);
       const nextRev = commit ? Math.max(revision, remoteRev) + 1 : Math.max(revision, remoteRev);
       const body = JSON.stringify({ ...doc, revision: nextRev, live: !commit }, null, 2);
       try {
@@ -248,7 +339,15 @@ export default {
         });
         if (!put.ok) {
           if (put.status === 409) {
-            await pullSharedRemote();
+            // Merge their save into ours and retry — do not drop guest inserts.
+            try {
+              const res = await collabHttp(`${collabRemote}/collab/project`, { timeoutMs: 8000 });
+              if (res.ok && res.body && typeof res.body === 'object') {
+                const conflictRev = Number(res.body.revision) || 0;
+                rebaseLocalOnto(res.body);
+                revision = Math.max(revision, conflictRev);
+              }
+            } catch { /* retry with current revision */ }
             return false;
           }
           api.log(collabHttpError(put, `Collab put failed (${put.status})`));
@@ -260,8 +359,8 @@ export default {
       }
       if (!alive) return false;
       revision = nextRev;
-      lastShared = shot;
-      saved = shot;
+      lastShared = mergedShot;
+      saved = mergedShot;
       if (commit) previewing = false;
       return true;
     }
@@ -291,6 +390,7 @@ export default {
 
     async function pullShared() {
       if (!alive || !filePath || shareTimer || pendingCommit || previewing) return;
+      if (snap(doc) !== lastShared) return;
       if (collabRemote) return pullSharedRemote();
       let raw;
       try { raw = JSON.parse(await api.host.fs.read(filePath)); }
@@ -306,6 +406,7 @@ export default {
 
     async function pullSharedRemote() {
       if (!alive || !collabRemote || shareTimer || pendingCommit || previewing) return;
+      if (snap(doc) !== lastShared) return;
       let raw;
       try {
         const res = await collabHttp(`${collabRemote}/collab/project`, { timeoutMs: 8000 });
@@ -427,12 +528,13 @@ export default {
       api.bus.emit('project:locks', ids.slice());
     }
     function rankClaims(people) {
+      // Last claim wins so a guest can take over a part the host still has selected.
       const best = new Map();
       const consider = (session, claim) => {
         if (!claim || typeof claim.id !== 'string' || !claim.id) return;
         const at = Number.isFinite(claim.at) ? claim.at : 0;
         const prev = best.get(claim.id);
-        if (!prev || at < prev.at || (at === prev.at && session < prev.session)) {
+        if (!prev || at > prev.at || (at === prev.at && session > prev.session)) {
           best.set(claim.id, { at, session });
         }
       };
@@ -957,6 +1059,16 @@ export default {
       mySelection = normalizeClaims(next);
       // Empty publishes include AFK-driven clears — those must not wake activity.
       if (mySelection.length) pose = { ...pose, activeAt: Date.now() };
+      // Optimistically drop locks on parts we just claimed so tools can move them
+      // before the next presence round-trip (otherwise transform snaps back).
+      let unlocked = false;
+      for (const claim of mySelection) {
+        if (lockIds.delete(claim.id)) unlocked = true;
+      }
+      if (unlocked) {
+        lockShot = '';
+        publishLocks([...lockIds]);
+      }
       presenceTick();
     });
     api.bus.on('project:revert-request', () => api.bus.emit('project:reverted', doc));
@@ -1217,9 +1329,11 @@ export default {
     api.bus.on('project:live', (change) => {
       // Live Mode is a separate simulation layer — never write it into the edit document.
       if (sessionMode === 'live') return;
-      const list = changeList(change).filter((item) => item && !lockIds.has(item.kind));
+      const list = changeList(change).filter((item) => item && (!lockIds.has(item.kind) || iOwn(item.kind)));
       if (!list.length) {
-        if (changeList(change).some((item) => lockIds.has(item?.kind))) api.bus.emit('project:reverted', doc);
+        if (changeList(change).some((item) => lockIds.has(item?.kind) && !iOwn(item?.kind))) {
+          api.bus.emit('project:reverted', doc);
+        }
         return;
       }
       const before = snap(doc);
@@ -1230,9 +1344,11 @@ export default {
     });
     api.bus.on('project:change', (change) => {
       if (sessionMode === 'live') return;
-      const list = changeList(change).filter((item) => item && !lockIds.has(item.kind));
+      const list = changeList(change).filter((item) => item && (!lockIds.has(item.kind) || iOwn(item.kind)));
       if (!list.length) {
-        if (changeList(change).some((item) => lockIds.has(item?.kind))) api.bus.emit('project:reverted', doc);
+        if (changeList(change).some((item) => lockIds.has(item?.kind) && !iOwn(item?.kind))) {
+          api.bus.emit('project:reverted', doc);
+        }
         return;
       }
       const before = snap(doc);
@@ -1266,8 +1382,7 @@ export default {
         while (names.has(`${base} ${n}`)) n += 1;
         name = `${base} ${n}`;
       }
-      const id = `part-${doc.nextPart}`;
-      doc.nextPart += 1;
+      const id = allocPartId();
       const part = {
         id,
         name,
@@ -1311,7 +1426,7 @@ export default {
     });
     api.bus.on('project:rename', (change) => {
       if (sessionMode === 'live') return;
-      if (lockIds.has(change?.kind)) {
+      if (lockIds.has(change?.kind) && !iOwn(change?.kind)) {
         api.bus.emit('project:reverted', doc);
         return;
       }
@@ -1375,8 +1490,8 @@ export default {
     api.bus.on('project:solid', (change) => {
       if (sessionMode === 'live') return;
       const kind = change?.kind;
-      if (!kind || lockIds.has(kind)) {
-        if (lockIds.has(kind)) api.bus.emit('project:reverted', doc);
+      if (!kind || (lockIds.has(kind) && !iOwn(kind))) {
+        if (kind && lockIds.has(kind) && !iOwn(kind)) api.bus.emit('project:reverted', doc);
         return;
       }
       const part = findPart(kind);
@@ -1408,9 +1523,9 @@ export default {
     api.bus.on('project:patch', (change) => {
       if (sessionMode === 'live') return;
       const requested = Array.isArray(change?.kinds) ? change.kinds : (change?.kind ? [change.kind] : []);
-      const ids = requested.filter((id) => id && !lockIds.has(id));
+      const ids = requested.filter((id) => id && (!lockIds.has(id) || iOwn(id)));
       if (!ids.length) {
-        if (requested.some((id) => lockIds.has(id))) api.bus.emit('project:reverted', doc);
+        if (requested.some((id) => lockIds.has(id) && !iOwn(id))) api.bus.emit('project:reverted', doc);
         return;
       }
       let any = false;
@@ -1477,10 +1592,10 @@ export default {
     api.bus.on('project:recolor', (change) => {
       if (sessionMode === 'live') return;
       const requested = Array.isArray(change?.kinds) ? change.kinds : [];
-      const ids = requested.filter((id) => !lockIds.has(id));
+      const ids = requested.filter((id) => id && (!lockIds.has(id) || iOwn(id)));
       const color = typeof change?.color === 'string' ? change.color : '';
       if (!ids.length || !/^#[0-9a-fA-F]{6}$/.test(color)) {
-        if (requested.some((id) => lockIds.has(id))) api.bus.emit('project:reverted', doc);
+        if (requested.some((id) => lockIds.has(id) && !iOwn(id))) api.bus.emit('project:reverted', doc);
         return;
       }
       const next = color.toLowerCase();
@@ -1523,7 +1638,7 @@ export default {
     });
     api.bus.on('project:delete', (kind) => {
       if (sessionMode === 'live') return;
-      if (lockIds.has(kind)) {
+      if (lockIds.has(kind) && !iOwn(kind)) {
         api.bus.emit('project:reverted', doc);
         return;
       }

@@ -1007,7 +1007,12 @@ export default {
     const groupCenter = new THREE.Vector3();
 
     function activeSelection() {
-      return selection.filter((model) => model && !isLocked(model.userData.kind));
+      // Keep parts we just claimed even if locks have not cleared yet.
+      return selection.filter((model) => {
+        if (!model) return false;
+        const id = model.userData.kind;
+        return !isLocked(id) || claims.has(id);
+      });
     }
 
     function selectionBounds(list, targetBox = groupBox) {
@@ -1485,11 +1490,6 @@ export default {
         return;
       }
       const model = pickModel();
-      if (model && isLocked(model.userData.kind)) {
-        hoverBox.visible = false;
-        root.style.cursor = 'not-allowed';
-        return;
-      }
       if (model && !selection.includes(model)) placeOutline(hoverBox, model);
       else hoverBox.visible = false;
     }
@@ -3011,7 +3011,7 @@ export default {
         }
         if (tool === 'move') {
           const model = pickModel();
-          if (model && !isLocked(model.userData.kind) && model.userData.kind !== 'baseplate') {
+          if (model && model.userData.kind !== 'baseplate') {
             if (e.ctrlKey || e.metaKey) {
               const id = model.userData.kind;
               const ids = selection.map((item) => item.userData.kind);
@@ -3019,7 +3019,8 @@ export default {
             } else if (!selection.includes(model)) {
               applySelection(model.userData.kind);
             }
-            beginSurfaceDrag(model, e);
+            // Selection publish unlocks our claim synchronously; retry lock check after.
+            if (!isLocked(model.userData.kind)) beginSurfaceDrag(model, e);
             return;
           }
         }
@@ -3100,9 +3101,8 @@ export default {
             api.bus.emit('scene:select', [...next]);
           } else api.bus.emit('scene:select', hits);
         } else if (!click.dragged) {
-          if (click.model && isLocked(click.model.userData.kind)) {
-            /* another person already has this object */
-          } else if (click.ctrl && click.model) {
+          // Selecting a locked part claims it (presence last-writer-wins); do not ignore the click.
+          if (click.ctrl && click.model) {
             const id = click.model.userData.kind;
             const ids = selection.map((model) => model.userData.kind);
             api.bus.emit('scene:select', ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
@@ -3561,7 +3561,10 @@ export default {
       const ids = selection.map((model) => model.userData.kind);
       const now = Date.now();
       for (const id of [...claims.keys()]) if (!ids.includes(id)) claims.delete(id);
-      for (const id of ids) if (!claims.has(id)) claims.set(id, now);
+      for (const id of ids) {
+        // Fresh claim time when taking a locked part so last-writer-wins can steal it.
+        if (!claims.has(id) || isLocked(id)) claims.set(id, now);
+      }
       api.bus.emit('presence:selection', ids.map((id) => ({ id, at: claims.get(id) })));
     }
     function applySelection(spec) {
@@ -3580,7 +3583,7 @@ export default {
       const ids = spec == null ? [] : (Array.isArray(spec) ? spec : [spec]);
       const next = [];
       for (const id of ids) {
-        if (isLocked(id)) continue;
+        // Allow selecting locked parts so the click can take the claim (last writer wins).
         const model = models.find((item) => item.userData.kind === id);
         if (model && !next.includes(model)) next.push(model);
       }
@@ -3593,7 +3596,8 @@ export default {
       publishSelection();
     }
     function releaseLocked() {
-      if (drag && selected && isLocked(selected.userData.kind)) {
+      const foreignLock = (id) => isLocked(id) && !claims.has(id);
+      if (drag && selected && foreignLock(selected.userData.kind)) {
         drag = null;
         pendingClick = null;
         hideReadout();
@@ -3601,8 +3605,8 @@ export default {
         root.style.cursor = 'default';
         api.bus.emit('project:revert-request');
       }
-      if (!selection.some((model) => isLocked(model.userData.kind))) return;
-      selection = selection.filter((model) => !isLocked(model.userData.kind));
+      if (!selection.some((model) => foreignLock(model.userData.kind))) return;
+      selection = selection.filter((model) => !foreignLock(model.userData.kind));
       selected = selection[selection.length - 1] ?? null;
       syncTools();
       publishScene();
