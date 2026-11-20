@@ -4,11 +4,14 @@ using System.Text.RegularExpressions;
 namespace GameWindow;
 
 /// <summary>
-/// Outbound Cloudflare quick tunnel so guests can reach CollabHost without router
-/// port forwarding (Xfinity often blocks local port-forward UI).
+/// Bundled Cloudflare quick tunnel. Runs as a child of GameWindow (job-object kill-on-close)
+/// and is stopped explicitly on shutdown so it never outlives the app.
 /// </summary>
 static class CollabTunnel
 {
+    public const string RelativeExe = "Tools/cloudflared.exe";
+    const string DownloadUrl = "https://github.com/cloudflare/cloudflared/releases/download/2026.11.1/cloudflared-windows-amd64.exe";
+
     static Process? _proc;
     static readonly object Gate = new();
     static readonly Regex UrlRx = new(
@@ -17,6 +20,10 @@ static class CollabTunnel
 
     public static string? PublicUrl { get; private set; }
     public static string? Error { get; private set; }
+    public static bool Running
+    {
+        get { lock (Gate) return _proc is { HasExited: false }; }
+    }
 
     public static void Start(int localPort) => _ = Task.Run(() =>
     {
@@ -35,11 +42,11 @@ static class CollabTunnel
             if (_proc is { HasExited: false }) return;
         }
 
-        var exe = FindCloudflared();
+        var exe = EnsureBundled();
         if (exe == null)
         {
-            Error = "cloudflared not found";
-            Log.Warn("Collab tunnel skipped: cloudflared.exe not installed.");
+            Error = "Bundled cloudflared is missing";
+            Log.Warn("Collab tunnel skipped: " + RelativeExe + " not available.");
             return;
         }
 
@@ -68,51 +75,57 @@ static class CollabTunnel
         proc.Exited += (_, _) =>
         {
             Log.Warn($"Collab tunnel exited (code {proc.ExitCode}).");
-            if (PublicUrl != null) PublicUrl = null;
+            PublicUrl = null;
         };
 
         if (!proc.Start())
         {
-            Error = "Could not start cloudflared";
+            Error = "Could not start bundled cloudflared";
             return;
         }
         lock (Gate) { _proc = proc; }
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
-        Log.Info($"Collab tunnel starting ({exe})");
+        Log.Info($"Collab tunnel starting (bundled {exe})");
     }
 
-    static string? FindCloudflared()
+    /// <summary>Prefer Tools under the project root; fall back to next to the exe; copy/download if needed.</summary>
+    static string? EnsureBundled()
     {
-        var bundled = Path.Combine(Paths.Root, "Tools", "cloudflared.exe");
-        if (File.Exists(bundled)) return bundled;
+        var rootPath = Path.Combine(Paths.Root, "Tools", "cloudflared.exe");
+        if (File.Exists(rootPath)) return rootPath;
 
-        var candidates = new[]
+        var basePath = Path.Combine(AppContext.BaseDirectory, "Tools", "cloudflared.exe");
+        if (File.Exists(basePath))
         {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "cloudflared", "cloudflared.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet", "Links", "cloudflared.exe"),
-        };
-        foreach (var c in candidates)
-            if (File.Exists(c)) return c;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(rootPath)!);
+                File.Copy(basePath, rootPath, true);
+                return rootPath;
+            }
+            catch
+            {
+                return basePath;
+            }
+        }
 
+        // Last resort: fetch once into the project Tools folder (same binary the build ships).
         try
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = "where",
-                Arguments = "cloudflared",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-            };
-            using var p = Process.Start(psi);
-            var output = p?.StandardOutput.ReadToEnd() ?? "";
-            p?.WaitForExit(3000);
-            var first = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-            if (!string.IsNullOrEmpty(first) && File.Exists(first)) return first;
+            Directory.CreateDirectory(Path.GetDirectoryName(rootPath)!);
+            Log.Info("Downloading bundled cloudflared…");
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
+            var bytes = http.GetByteArrayAsync(DownloadUrl).GetAwaiter().GetResult();
+            File.WriteAllBytes(rootPath, bytes);
+            if (File.Exists(rootPath) && new FileInfo(rootPath).Length > 1_000_000)
+                return rootPath;
         }
-        catch { /* ignore */ }
-
+        catch (Exception ex)
+        {
+            Error = "Could not download cloudflared: " + ex.Message;
+            Log.Warn(Error);
+        }
         return null;
     }
 
@@ -131,10 +144,11 @@ static class CollabTunnel
             if (!proc.HasExited)
             {
                 proc.Kill(entireProcessTree: true);
-                proc.WaitForExit(2000);
+                proc.WaitForExit(3000);
             }
         }
         catch { /* shutting down */ }
         try { proc.Dispose(); } catch { /* ignore */ }
+        Log.Info("Collab tunnel stopped");
     }
 }

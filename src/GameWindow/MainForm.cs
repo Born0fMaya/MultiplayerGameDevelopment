@@ -579,6 +579,8 @@ sealed class MainForm : Form
 
         Step("stop timers", () => { _watchdog.Stop(); _boundsSaver.Stop(); });
         Step("save window state", SaveWindowState);
+        // Bundled helpers (cloudflared tunnel) must die with the window — stop before UI teardown.
+        Step("stop collab tunnel", CollabTunnel.Stop);
         try
         {
             if (_web?.CoreWebView2 is { } core)

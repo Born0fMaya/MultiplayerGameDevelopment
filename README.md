@@ -80,7 +80,9 @@ Endpoints (host): `/collab/info`, `/collab/project`, `/collab/session/{id}`
 
 Guest connections use the host HTTP bridge (`api.host.http.fetch`), not browser `fetch`, because the shell is `https://app.local` and Chromium blocks mixed-content `http://` calls to public IPs.
 
-**Public internet without router access:** GameWindow starts a **Cloudflare quick tunnel** (via `Tools/cloudflared.exe` or an installed `cloudflared`) and shows a **Share link** (`https://….trycloudflare.com`) in the presence menu. Guests paste that full link into Host IP — no port-forward needed.
+**Public internet without router access:** GameWindow **bundles** `Tools/cloudflared.exe` (downloaded on build if missing). The host starts that child process with CollabHost and **kills it on exit** (explicit stop + Windows job object). The presence menu shows a **Share link** (`https://….trycloudflare.com`). Guests paste that full link into Host IP — no separate Cloudflare install and no router port-forward.
+
+Rule for agents: any third-party helper required at runtime must ship with / be fetched into the app tree, run as a child of GameWindow, and stop when GameWindow closes. Do not document “install X separately” as the primary path.
 
 **Public IP (optional):** only works if TCP **5282** is port-forwarded to the host PC. Many Xfinity gateways require the account holder’s Xfinity app for that.
 

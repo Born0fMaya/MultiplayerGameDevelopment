@@ -27,8 +27,8 @@ Storage/_*.json
 *.sessions/
 publish/
 publish-*/
-# Keep Tools/cloudflared.exe local (large binary); document install in README
-Tools/cloudflared.exe
+# Large helper binaries are fetched by the GameWindow build / first-run ensure — not committed
+Tools/*.exe
 
 # OS / editor junk
 .DS_Store

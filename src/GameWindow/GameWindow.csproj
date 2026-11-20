@@ -33,4 +33,29 @@
     <EmbeddedResource Include="DefaultShell\**\*" LogicalName="DefaultShell/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- Bundled collab helper: lives next to the app, not a separate user install. -->
+  <PropertyGroup>
+    <CloudflaredVersion>2026.11.1</CloudflaredVersion>
+    <CloudflaredDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\Tools'))</CloudflaredDir>
+    <CloudflaredExe>$(CloudflaredDir)\cloudflared.exe</CloudflaredExe>
+    <CloudflaredUrl>https://github.com/cloudflare/cloudflared/releases/download/$(CloudflaredVersion)/cloudflared-windows-amd64.exe</CloudflaredUrl>
+  </PropertyGroup>
+
+  <Target Name="EnsureCloudflared" BeforeTargets="Build;Publish">
+    <MakeDir Directories="$(CloudflaredDir)" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;if (-not (Test-Path -LiteralPath '$(CloudflaredExe)')) { Write-Host 'Downloading bundled cloudflared…'; Invoke-WebRequest -Uri '$(CloudflaredUrl)' -OutFile '$(CloudflaredExe)' -UseBasicParsing }&quot;"
+          Condition="!Exists('$(CloudflaredExe)')"
+          IgnoreExitCode="false" />
+    <Warning Text="Bundled cloudflared.exe is missing at $(CloudflaredExe). Online share-link collab will try to download it at runtime."
+             Condition="!Exists('$(CloudflaredExe)')" />
+  </Target>
+
+  <ItemGroup Condition="Exists('$(CloudflaredExe)')">
+    <Content Include="$(CloudflaredExe)" Link="Tools\cloudflared.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
 </Project>
