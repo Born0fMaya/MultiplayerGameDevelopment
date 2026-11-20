@@ -138,17 +138,45 @@ static class CollabTunnel
             _proc = null;
         }
         PublicUrl = null;
-        if (proc == null) return;
-        try
+        if (proc != null)
         {
-            if (!proc.HasExited)
+            try
             {
-                proc.Kill(entireProcessTree: true);
-                proc.WaitForExit(3000);
+                if (!proc.HasExited)
+                {
+                    proc.Kill(entireProcessTree: true);
+                    proc.WaitForExit(3000);
+                }
             }
+            catch { /* shutting down */ }
+            try { proc.Dispose(); } catch { /* ignore */ }
         }
-        catch { /* shutting down */ }
-        try { proc.Dispose(); } catch { /* ignore */ }
+        // Also sweep any orphaned bundled helpers (crash / force-kill edge cases).
+        KillBundledOrphans();
         Log.Info("Collab tunnel stopped");
+    }
+
+    static void KillBundledOrphans()
+    {
+        var markers = new[]
+        {
+            Path.GetFullPath(Path.Combine(Paths.Root, "Tools", "cloudflared.exe")),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Tools", "cloudflared.exe")),
+        };
+        foreach (var proc in Process.GetProcessesByName("cloudflared"))
+        {
+            try
+            {
+                string? path = null;
+                try { path = proc.MainModule?.FileName; } catch { /* access denied */ }
+                if (path == null) continue;
+                var full = Path.GetFullPath(path);
+                if (!markers.Any(m => full.Equals(m, StringComparison.OrdinalIgnoreCase))) continue;
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(2000);
+            }
+            catch { /* ignore */ }
+            finally { try { proc.Dispose(); } catch { } }
+        }
     }
 }
