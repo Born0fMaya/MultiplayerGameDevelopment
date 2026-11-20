@@ -37,11 +37,6 @@ static class CollabTunnel
 
     static void StartCore(int localPort)
     {
-        lock (Gate)
-        {
-            if (_proc is { HasExited: false }) return;
-        }
-
         var exe = EnsureBundled();
         if (exe == null)
         {
@@ -50,43 +45,48 @@ static class CollabTunnel
             return;
         }
 
-        var psi = new ProcessStartInfo
+        lock (Gate)
         {
-            FileName = exe,
-            Arguments = $"tunnel --url http://127.0.0.1:{localPort}",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            WorkingDirectory = Paths.Root,
-        };
-        var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        void OnLine(string? line)
-        {
-            if (string.IsNullOrWhiteSpace(line)) return;
-            var m = UrlRx.Match(line);
-            if (!m.Success) return;
-            PublicUrl = m.Value.TrimEnd('/');
-            Error = null;
-            Log.Info("Collab tunnel ready at " + PublicUrl);
-        }
-        proc.OutputDataReceived += (_, e) => OnLine(e.Data);
-        proc.ErrorDataReceived += (_, e) => OnLine(e.Data);
-        proc.Exited += (_, _) =>
-        {
-            Log.Warn($"Collab tunnel exited (code {proc.ExitCode}).");
-            PublicUrl = null;
-        };
+            if (_proc is { HasExited: false }) return;
 
-        if (!proc.Start())
-        {
-            Error = "Could not start bundled cloudflared";
-            return;
+            var psi = new ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = $"tunnel --url http://127.0.0.1:{localPort}",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WorkingDirectory = Paths.Root,
+            };
+            var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            void OnLine(string? line)
+            {
+                if (string.IsNullOrWhiteSpace(line)) return;
+                var m = UrlRx.Match(line);
+                if (!m.Success) return;
+                PublicUrl = m.Value.TrimEnd('/');
+                Error = null;
+                Log.Info("Collab tunnel ready at " + PublicUrl);
+            }
+            proc.OutputDataReceived += (_, e) => OnLine(e.Data);
+            proc.ErrorDataReceived += (_, e) => OnLine(e.Data);
+            proc.Exited += (_, _) =>
+            {
+                Log.Warn($"Collab tunnel exited (code {proc.ExitCode}).");
+                PublicUrl = null;
+            };
+
+            if (!proc.Start())
+            {
+                Error = "Could not start bundled cloudflared";
+                return;
+            }
+            _proc = proc;
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+            Log.Info($"Collab tunnel starting (bundled {exe})");
         }
-        lock (Gate) { _proc = proc; }
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
-        Log.Info($"Collab tunnel starting (bundled {exe})");
     }
 
     /// <summary>Prefer Tools under the project root; fall back to next to the exe; copy/download if needed.</summary>

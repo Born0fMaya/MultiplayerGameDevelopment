@@ -610,6 +610,7 @@ export default {
     const panel = document.createElement('form');
     panel.hidden = true;
     panel.dataset.presence = 'true';
+    panel.addEventListener('submit', (e) => e.preventDefault());
     panel.style.cssText = [
       'position:fixed',
       'z-index:40',
@@ -711,22 +712,28 @@ export default {
     let collabBusy = false;
     const showCollab = (status = {}) => {
       if ('connected' in status) collabConnected = !!status.connected;
-      const connecting = !!status.connecting;
-      connectBtn.textContent = collabConnected ? 'Disconnect' : (connecting ? 'Connecting…' : 'Connect');
-      connectBtn.disabled = connecting || collabBusy;
-      ipInput.disabled = collabConnected || connecting;
+      // Clear join-in-progress when project.js reports a result.
+      if (status.connecting === false || status.error || status.connected) collabBusy = false;
+      const joining = !!status.connecting || (!collabConnected && collabBusy);
+      connectBtn.textContent = collabConnected ? 'Disconnect' : (joining ? 'Connecting…' : 'Connect');
+      connectBtn.disabled = joining;
+      ipInput.disabled = collabConnected || joining;
       // Never overwrite the join field with our own share link.
       if ('error' in status || 'connected' in status || 'connecting' in status) {
         if (status.error) collabStatus.textContent = status.error;
         else if (collabConnected) collabStatus.textContent = `Connected to ${status.host || 'host'}`;
-        else if (connecting) collabStatus.textContent = 'Connecting…';
+        else if (joining) collabStatus.textContent = 'Connecting…';
         else collabStatus.textContent = 'Open a project, then send your share link to friends.';
       }
+      // Only update the host share line when this event actually carries share info.
+      // collab:status from connect/disconnect must not wipe the live tunnel URL.
+      const hasShareInfo = 'tunnelUrl' in status || 'share' in status || 'lanIp' in status
+        || 'publicIp' in status || 'addresses' in status || 'tunnelError' in status;
+      if (!hasShareInfo) return;
       const port = status.port || 5282;
-      // Prefer live tunnel URL so guests always get a reachable address.
       const share = status.tunnelUrl || status.share || status.publicIp || status.lanIp || '';
-      latestShare = share;
       if (share) {
+        latestShare = share;
         const isUrl = /^https?:\/\//i.test(share);
         yourIp.textContent = isUrl ? `Send this to friends:\n${share}` : `Send this to friends:\n${share}:${port}`;
         yourIp.title = 'Click Copy share link — this is what guests paste to join.';
@@ -739,10 +746,10 @@ export default {
         const best = status.addresses.find((ip) => ip && ip !== '127.0.0.1' && !/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip))
           || status.addresses.find((ip) => ip && ip !== '127.0.0.1')
           || status.addresses[0];
-        yourIp.textContent = `Send this to friends:\n${best}:${port}`;
         latestShare = `${best}:${port}`;
+        yourIp.textContent = `Send this to friends:\n${latestShare}`;
         copyShareBtn.hidden = false;
-      } else {
+      } else if (!latestShare) {
         yourIp.textContent = 'Share link: waiting…';
         copyShareBtn.hidden = true;
       }
@@ -798,8 +805,9 @@ export default {
       try { localStorage.setItem('gw-collab-host', host); } catch { /* private mode */ }
       collabBusy = true;
       connectBtn.disabled = true;
+      connectBtn.textContent = 'Connecting…';
+      collabStatus.textContent = 'Connecting…';
       api.bus.emit('collab:connect', { host });
-      setTimeout(() => { collabBusy = false; }, 50);
     });
     ipInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {

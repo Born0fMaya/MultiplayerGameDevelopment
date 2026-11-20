@@ -89,17 +89,14 @@ export default {
     let collabHostLabel = '';
     const normPath = (p) => String(p || '').replace(/\//g, '\\').replace(/\\+$/g, '').toLowerCase();
     const collabBase = (host) => {
-      const raw = String(host || '').trim();
+      const raw = String(host || '').trim().replace(/\/+$/, '');
       if (!raw) return '';
-      // Full share links (Cloudflare tunnel) — keep https, no :5282 suffix.
-      if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, '');
-      let cleaned = raw.replace(/^\/+|\/+$/g, '');
+      // Cloudflare quick tunnels must be https with no :5282 (guests paste share links).
+      const cf = raw.match(/^(?:https?:\/\/)?([a-z0-9-]+\.trycloudflare\.com)(?::\d+)?(?:\/.*)?$/i);
+      if (cf) return `https://${cf[1]}`;
+      if (/^https?:\/\//i.test(raw)) return raw;
+      const cleaned = raw.replace(/^\/+/, '');
       if (!cleaned) return '';
-      // Hostname-only tunnel links people may paste without the scheme.
-      if (/\.trycloudflare\.com$/i.test(cleaned.split('/')[0].split(':')[0])) {
-        const hostOnly = cleaned.replace(/:\d+$/, '').replace(/\/+$/, '');
-        return `https://${hostOnly}`;
-      }
       if (/:\d+$/.test(cleaned)) return `http://${cleaned}`;
       return `http://${cleaned}:${COLLAB_PORT}`;
     };
@@ -827,14 +824,15 @@ export default {
       } catch (err) {
         const msg = err?.message || 'Could not reach that host.';
         publishCollabStatus({
+          connecting: false,
           error: /timeout|canceled|reach|connect/i.test(msg)
-            ? `${msg} If this is a public IP, the host needs router port-forward TCP 5282.`
+            ? `${msg} Check the share link, or if using a public IP the host needs port-forward TCP 5282.`
             : msg,
         });
         return false;
       }
       if (!info?.ok) {
-        publishCollabStatus({ error: 'That host is not running collaboration.' });
+        publishCollabStatus({ connecting: false, error: 'That host is not running collaboration.' });
         return false;
       }
       let raw;
@@ -844,21 +842,21 @@ export default {
           const msg = res.status === 404
             ? 'Host has no project open yet.'
             : collabHttpError(res, `Host project failed (${res.status}).`);
-          publishCollabStatus({ error: msg });
+          publishCollabStatus({ connecting: false, error: msg });
           return false;
         }
         raw = res.body && typeof res.body === 'object' ? res.body : null;
       } catch (err) {
-        publishCollabStatus({ error: err?.message || 'Could not download the project.' });
+        publishCollabStatus({ connecting: false, error: err?.message || 'Could not download the project.' });
         return false;
       }
       if (!raw) {
-        publishCollabStatus({ error: 'Host sent an empty project.' });
+        publishCollabStatus({ connecting: false, error: 'Host sent an empty project.' });
         return false;
       }
       const next = adopt(raw);
       if (!next) {
-        publishCollabStatus({ error: 'Host sent an invalid project.' });
+        publishCollabStatus({ connecting: false, error: 'Host sent an invalid project.' });
         return false;
       }
       await leavePresence();
@@ -884,13 +882,13 @@ export default {
       publish();
       const title = (info.project && String(info.project)) || 'Online';
       await api.host.window.title(`${title} (online)`);
-      publishCollabStatus({ error: '', connecting: false });
+      publishCollabStatus({ error: '', connecting: false, connected: true });
       return true;
     }
 
     async function disconnectCollab() {
       if (!collabRemote) {
-        publishCollabStatus();
+        publishCollabStatus({ connected: false, connecting: false });
         return;
       }
       await leavePresence();
@@ -900,7 +898,7 @@ export default {
       presenceFile = '';
       publishActiveProject();
       presenceTick();
-      publishCollabStatus();
+      publishCollabStatus({ connected: false, connecting: false, error: '' });
       const name = (filePath || '').split(/[/\\]/).pop().replace(/\.json$/i, '');
       await api.host.window.title(name || 'Game');
     }
