@@ -3032,7 +3032,9 @@ export default {
         const model = pickModel();
         const kind = model?.userData.kind ?? null;
         const onSelection = kind != null && selection.some((item) => item.userData.kind === kind);
-        rightClick = { x: e.clientX, y: e.clientY, moved: false, kind: onSelection ? kind : null };
+        const surface = pickSurfaceTarget(new Set());
+        rightClick = { x: e.clientX, y: e.clientY, moved: false, kind: onSelection ? kind : null,
+          position: surface?.point.toArray() };
         if (!onSelection) draggingLook = true;
       } else if (e.button === 1) { draggingPan = true; e.preventDefault(); }
       if (draggingLook || draggingPan) hideHint();
@@ -3110,7 +3112,7 @@ export default {
         }
         syncTools();
       }
-      if (e.button === 2) rightMenu = rightClick;
+      if (e.button === 2) rightMenu = e.type === 'pointercancel' ? null : rightClick;
       rightClick = null;
       endDrag();
     }
@@ -3204,12 +3206,12 @@ export default {
         }
         return;
       }
-      if (rightClick && !draggingLook && (e.buttons & 2)) {
+      if (rightClick && !rightClick.moved && (e.buttons & 2)) {
         if (Math.hypot(e.clientX - rightClick.x, e.clientY - rightClick.y) > 4) {
           rightClick.moved = true;
           draggingLook = true;
           hideHint();
-        }
+        } else return;
       }
       if (!(draggingLook || draggingPan)) {
         if (!e.buttons && tool === 'erase' && !sketch) {
@@ -3436,8 +3438,10 @@ export default {
       if (isLive()) return;
       const click = rightMenu;
       rightMenu = null;
-      if (!click || click.moved || !click.kind) return;
-      api.bus.emit('explorer:context', { x: click.x, y: click.y, id: click.kind });
+      if (!click || click.moved) return;
+      let handled = false;
+      if (click.position) api.bus.emit('viewport:context', { ...click, handle: () => { handled = true; } });
+      if (!handled && click.kind) api.bus.emit('explorer:context', { x: click.x, y: click.y, id: click.kind });
     });
     on(root, 'auxclick', (e) => e.preventDefault());
     on(window, 'keydown', (e) => onKey(e, true));
@@ -3538,11 +3542,14 @@ export default {
       return [cornerX + width / 2, height / 2, cornerZ + depth / 2];
     }
 
-    api.bus.on('part:create', (shape) => {
+    api.bus.on('part:create', (request) => {
       if (isLive()) return;
+      const shape = typeof request === 'string' ? request : request?.shape;
       const size = SHAPE_SIZE[shape] || SHAPE_SIZE.block;
-      const point = creationPoint(size.y, size.x, size.z);
-      if (shape === 'camera') point[1] = Math.max(point[1], 5);
+      const position = request?.position;
+      const exact = Array.isArray(position) && position.length === 3 && position.every(Number.isFinite);
+      const point = exact ? [...position] : creationPoint(size.y, size.x, size.z);
+      if (shape === 'camera' && !exact) point[1] = Math.max(point[1], 5);
       if (shape === 'controller' || shape === 'script') return;
       api.bus.emit('project:insert', {
         shape: SHAPE_SIZE[shape] ? shape : 'block',

@@ -115,6 +115,7 @@ Start-Process -FilePath $exe -ArgumentList "--root `"$root`"" -WorkingDirectory 
 | `viewport` | 3D scene, tools, physics, Live Mode camera/pawn |
 | `project` | Open/save project, undo, presence, **online collab connect/sync** |
 | `toolbar` | Tools ribbon, Play/Stop, **presence menu + share link + Connect** |
+| `viewport-context-menu` | Edit-mode right-click shape shortcuts. Uses the original viewport hit point and the same shape catalog as the toolbar. Disable this module to remove the shortcuts. |
 | `explorer` / `properties` / `taskbar` | Hierarchy, inspectors, bottom toggles |
 | `menu-bar` | File/Edit/View |
 | `assistant` | In-editor local AI (Ollama) |
@@ -365,6 +366,7 @@ Children are killed when GameWindow closes (job object).
 | Page frozen | `reset_webview` (then `hard=true` if needed) |
 | Guest Connect timeout | Host must have project open; send **current** tunnel share link; guest on latest code (host HTTP bridge) |
 | Guest transforms snap back / lost inserts | Fixed through 1.1.5: last-claimer locks, claim-through-locks, unique collab part ids, merge-on-conflict rebase, commits must advance revision (live may rewrite same rev). Both sides need latest Modules + host rebuild for CollabHost. |
+| Guest edit snaps back during a host refresh | Since 1.1.7, the guest rechecks for local edits after the host snapshot arrives before applying it. |
 | Share link missing in UI | Wait a few seconds for tunnel; check `host_log` for “Collab tunnel ready” |
 | `GameWindow.exe` locked on copy | Fully quit the app (not only kill renderer), then publish/copy |
 | Version badge wrong | Bump csproj Version, republish, restart |

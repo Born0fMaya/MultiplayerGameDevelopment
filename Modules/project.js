@@ -405,15 +405,19 @@ export default {
     }
 
     async function pullSharedRemote() {
-      if (!alive || !collabRemote || shareTimer || pendingCommit || previewing) return;
-      if (snap(doc) !== lastShared) return;
+      const remote = collabRemote;
+      const epoch = presenceEpoch;
+      const canApply = () => alive && remote && remote === collabRemote && epoch === presenceEpoch
+        && !shareTimer && !pendingCommit && !previewing && snap(doc) === lastShared;
+      if (!canApply()) return;
       let raw;
       try {
-        const res = await collabHttp(`${collabRemote}/collab/project`, { timeoutMs: 8000 });
+        const res = await collabHttp(`${remote}/collab/project`, { timeoutMs: 8000 });
         if (!res.ok || !res.body || typeof res.body !== 'object') return;
         raw = res.body;
       } catch { return; }
-      if (!alive) return;
+      // A drag or resize can begin while the host's response is in flight.
+      if (!canApply()) return;
       const next = adopt(raw);
       if (!next) return;
       const rev = Number(raw.revision) || 0;
