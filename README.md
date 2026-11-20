@@ -96,6 +96,7 @@ Rule for agents: any third-party helper required at runtime must ship with / be 
 4. Public inspector-facing values in S&box-related work should use `[Property]` when that stack is in play (see user/workspace guides).
 5. Don’t force-push `main`. Don’t commit secrets, WebView2 profiles, or local session junk.
 6. After host C# changes, republish/restart `GameWindow.exe`. Module-only JS/CSS changes usually hot-reload.
+7. **Bump the app version with every patch:** change `<Version>` in `src/GameWindow/GameWindow.csproj` (shown as `vX.Y.Z` in the bottom-right of the shell). Rebuild/restart so the badge updates.
 
 ### Hard “do not touch” notes
 

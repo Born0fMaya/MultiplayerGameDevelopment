@@ -22,8 +22,24 @@
       font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     }
     #app { min-height: 100%; }
+    #gw-version {
+      position: fixed;
+      right: 10px;
+      bottom: 6px;
+      z-index: 30;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--lw-muted);
+      font: 11px/1 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      user-select: none;
+      opacity: 0.85;
+    }
     #lw-overlay {
-      position: fixed; right: 12px; bottom: 12px; z-index: 2147483647;
+      position: fixed; right: 12px; bottom: 28px; z-index: 2147483647;
       max-width: min(620px, calc(100vw - 24px)); max-height: 45vh; overflow: auto;
       background: #2a1417; color: #ffd9d9; border: 1px solid #7a2a32; border-radius: 8px;
       padding: 8px 12px 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
@@ -37,5 +53,6 @@
 </head>
 <body>
   <div id="app"></div>
+  <div id="gw-version" aria-label="App version">…</div>
 </body>
 </html>

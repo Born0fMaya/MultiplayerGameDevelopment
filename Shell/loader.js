@@ -266,7 +266,22 @@ window.__lw = {
   disposeAll() { for (const name of [...records.keys()]) unmount(name); },
 };
 
+async function showVersion() {
+  const el = document.getElementById('gw-version');
+  if (!el) return;
+  try {
+    const info = await call('host.info');
+    const ver = info?.version ? String(info.version) : '';
+    el.textContent = ver ? `v${ver}` : '';
+    el.title = ver ? `GameWindow ${ver}` : '';
+  } catch {
+    el.textContent = '';
+  }
+}
+
 async function start() {
+  showVersion();
+
   let list = [];
   try { list = await call('modules.list'); }
   catch (err) { console.error('Could not list modules', err); }
