@@ -702,35 +702,50 @@ export default {
         else collabStatus.textContent = 'Open a project, then share your IP with friends.';
       }
       const port = status.port || 5282;
-      const share = status.share || status.publicIp || status.lanIp || '';
+      const share = status.share || status.tunnelUrl || status.publicIp || status.lanIp || '';
       if (share) {
-        yourIp.textContent = `Your IP: ${share}:${port}`;
-        yourIp.title = status.publicIp
-          ? 'Public IP — send this to friends over the internet (router must forward port 5282).'
-          : 'Local network IP — only works for devices on the same Wi‑Fi/LAN.';
+        const isUrl = /^https?:\/\//i.test(share);
+        yourIp.textContent = isUrl ? `Share link: ${share}` : `Your IP: ${share}:${port}`;
+        yourIp.title = status.tunnelUrl
+          ? 'Cloudflare share link — send this to friends (no router port-forward needed).'
+          : status.publicIp
+            ? 'Public IP — needs router port-forward of TCP 5282.'
+            : 'Local network IP — only works on the same Wi‑Fi/LAN.';
+        if (isUrl && !ipInput.value) ipInput.placeholder = share.replace(/^https?:\/\//i, '');
       } else if (Array.isArray(status.addresses) && status.addresses.length) {
         const best = status.addresses.find((ip) => ip && ip !== '127.0.0.1' && !/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip))
           || status.addresses.find((ip) => ip && ip !== '127.0.0.1')
           || status.addresses[0];
         yourIp.textContent = `Your IP: ${best}:${port}`;
+      } else if (status.tunnelError) {
+        yourIp.textContent = 'Share link: starting…';
       }
+    };
+    const refreshShareInfo = () => {
+      api.host.http.fetch('http://127.0.0.1:5282/collab/info', {
+        responseType: 'json',
+        timeoutMs: 5000,
+      }).then((res) => {
+        const info = res?.ok && res.body && typeof res.body === 'object' ? res.body : null;
+        if (!info) return;
+        showCollab({
+          addresses: info.addresses,
+          port: info.port || 5282,
+          publicIp: info.publicIp,
+          lanIp: info.lanIp,
+          tunnelUrl: info.tunnelUrl,
+          tunnelError: info.tunnelError,
+          share: info.share,
+        });
+      }).catch(() => { yourIp.textContent = 'Your IP: unavailable'; });
     };
     api.bus.on('collab:status', showCollab);
     api.bus.emit('collab:request');
-    api.host.http.fetch('http://127.0.0.1:5282/collab/info', {
-      responseType: 'json',
-      timeoutMs: 5000,
-    }).then((res) => {
-      const info = res?.ok && res.body && typeof res.body === 'object' ? res.body : null;
-      if (!info) return;
-      showCollab({
-        addresses: info.addresses,
-        port: info.port || 5282,
-        publicIp: info.publicIp,
-        lanIp: info.lanIp,
-        share: info.share,
-      });
-    }).catch(() => { yourIp.textContent = 'Your IP: unavailable'; });
+    refreshShareInfo();
+    // Tunnel URL appears a few seconds after launch.
+    setTimeout(refreshShareInfo, 2500);
+    setTimeout(refreshShareInfo, 6000);
+    setTimeout(refreshShareInfo, 12000);
     connectBtn.addEventListener('click', () => {
       if (collabBusy) return;
       if (collabConnected) {

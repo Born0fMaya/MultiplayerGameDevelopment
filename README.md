@@ -80,7 +80,9 @@ Endpoints (host): `/collab/info`, `/collab/project`, `/collab/session/{id}`
 
 Guest connections use the host HTTP bridge (`api.host.http.fetch`), not browser `fetch`, because the shell is `https://app.local` and Chromium blocks mixed-content `http://` calls to public IPs.
 
-**Public internet:** host must port-forward TCP **5282** on the router to the host PC. Without that, Connect times out even after the mixed-content fix.
+**Public internet without router access:** GameWindow starts a **Cloudflare quick tunnel** (via `Tools/cloudflared.exe` or an installed `cloudflared`) and shows a **Share link** (`https://….trycloudflare.com`) in the presence menu. Guests paste that full link into Host IP — no port-forward needed.
+
+**Public IP (optional):** only works if TCP **5282** is port-forwarded to the host PC. Many Xfinity gateways require the account holder’s Xfinity app for that.
 
 ---
 

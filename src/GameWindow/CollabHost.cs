@@ -166,8 +166,11 @@ static class CollabHost
             var local = LocalAddresses().Distinct().ToArray();
             var publicIp = await ResolvePublicIp();
             var lan = PreferredLanAddress(local);
-            // What friends on the internet should type (public WAN). Same-network fallback is LAN.
-            var share = !string.IsNullOrEmpty(publicIp) ? publicIp : lan;
+            var tunnel = CollabTunnel.PublicUrl;
+            // Prefer Cloudflare tunnel (no router port-forward). Else public IP, else LAN.
+            var share = !string.IsNullOrEmpty(tunnel) ? tunnel
+                : !string.IsNullOrEmpty(publicIp) ? publicIp
+                : lan;
             return Results.Json(new
             {
                 ok = true,
@@ -179,6 +182,8 @@ static class CollabHost
                 port = Port,
                 publicIp,
                 lanIp = lan,
+                tunnelUrl = tunnel,
+                tunnelError = CollabTunnel.Error,
                 share,
                 addresses = local,
             });
@@ -338,6 +343,7 @@ static class CollabHost
         _app = app;
         Running = true;
         Log.Info($"Collab server listening on http://*:{Port}/");
+        CollabTunnel.Start(Port);
     }
 
     static JsonArray MergeChat(List<JsonArray> lists)
@@ -362,6 +368,7 @@ static class CollabHost
 
     public static async Task Stop(int timeoutMs)
     {
+        CollabTunnel.Stop();
         var app = _app;
         if (app == null) return;
         Running = false;

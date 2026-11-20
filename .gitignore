@@ -27,6 +27,8 @@ Storage/_*.json
 *.sessions/
 publish/
 publish-*/
+# Keep Tools/cloudflared.exe local (large binary); document install in README
+Tools/cloudflared.exe
 
 # OS / editor junk
 .DS_Store
