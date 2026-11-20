@@ -294,8 +294,11 @@ export function splitFaceWithLoop(solid, faceId, loopPoints) {
   if (!pointInFaceRegion(next, face, frame, cu, cv)) return null;
 
   const innerId = `f${next.nextFace++}`;
+  // Keep verts and rim in the SAME order. Reversing only verts (old bug) made
+  // push/pull wall quads pair rim[i] with the wrong cap corner → hourglass sides.
+  const ordered = area > 0 ? innerIdx.slice() : innerIdx.slice().reverse();
   const holes = Array.isArray(face.holes) ? face.holes.map((hole) => hole.slice()) : [];
-  holes.push(innerIdx.slice());
+  holes.push(ordered.slice());
   const outerFace = {
     id: face.id,
     verts: face.verts.slice(),
@@ -305,9 +308,9 @@ export function splitFaceWithLoop(solid, faceId, loopPoints) {
   // (IngeTrazo "attached"): push/pull makes walls / through-holes instead of moving shared verts.
   const island = {
     id: innerId,
-    verts: area > 0 ? innerIdx.slice() : innerIdx.slice().reverse(),
+    verts: ordered.slice(),
     bordered: true,
-    rim: innerIdx.slice(), // stable parent-hole ring (survives push/pull)
+    rim: ordered.slice(), // stable parent-hole ring; must stay index-aligned with verts
   };
   next.faces.splice(faceIndex, 1, outerFace, island);
   return { solid: next, faceId: innerId };
@@ -524,7 +527,19 @@ export function extrudeFace(solid, faceId, distance) {
 
   // Bordered island: walls always run from the stable rim to the moved cap.
   // Drop prior extrusion walls so pull-then-push doesn't leave a protruding shell.
-  const rim = (live.rim && live.rim.length === live.verts.length) ? live.rim : live.verts;
+  const rim = (live.rim && live.rim.length) ? live.rim.slice() : live.verts.slice();
+  // Cap sources must stay index-aligned with rim. If an older cut reversed verts
+  // but not rim, extrude from rim order (same points) so walls don't cross.
+  let capSources;
+  if (!live.rim || live.rim.length !== live.verts.length) {
+    capSources = rim.slice();
+  } else if (rim.every((id, i) => id === live.verts[i])) {
+    capSources = rim.slice();
+  } else if (rim.every((id, i) => id === live.verts[live.verts.length - 1 - i])) {
+    capSources = rim.slice();
+  } else {
+    capSources = live.verts.slice(); // existing pulled/pushed cap
+  }
   stripIslandWalls(next, faceId, live);
 
   // Overshooting the far plane must punch through — never keep growing a spike.
@@ -532,8 +547,9 @@ export function extrudeFace(solid, faceId, distance) {
     return cutThrough(solid, faceId, opp);
   }
 
-  const newVerts = live.verts.map((index) => {
-    const v = next.vertices[index];
+  const newVerts = rim.map((_, i) => {
+    const src = capSources[i] ?? rim[i];
+    const v = next.vertices[src];
     const moved = [
       v[0] + normal[0] * distance,
       v[1] + normal[1] * distance,
@@ -553,10 +569,12 @@ export function extrudeFace(solid, faceId, distance) {
   offset /= rim.length || 1;
   if (Math.abs(offset) < 0.04) {
     live.verts = rim.slice();
+    live.rim = rim.slice();
     return next;
   }
 
   // Pocket/tunnel walls face the opening axis; pulled walls face outward.
+  // Quad a-b-c-d: rim edge a→b paired with cap edge d→c (same corner index).
   const axis = faceCentroid(next, { verts: rim });
   for (let i = 0; i < rim.length; i++) {
     const a = rim[i];
@@ -571,7 +589,7 @@ export function extrudeFace(solid, faceId, distance) {
     });
   }
   live.verts = newVerts;
-  if (!live.rim) live.rim = rim.slice();
+  live.rim = rim.slice();
   return next;
 }
 

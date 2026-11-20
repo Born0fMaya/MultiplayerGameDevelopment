@@ -16,6 +16,7 @@ Storage/WebView2/
 Storage/ollama/
 Storage/state*.json
 Storage/storage.json
+Storage/collab-active.json
 Storage/_mcp-*
 Storage/_*.png
 Storage/_*.txt
@@ -23,6 +24,9 @@ Storage/_*.js
 Storage/_*.mjs
 Storage/_*.lua
 Storage/_*.json
+*.sessions/
+publish/
+publish-*/
 
 # OS / editor junk
 .DS_Store

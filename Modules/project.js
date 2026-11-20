@@ -83,7 +83,38 @@ export default {
     let watchId = 0;
     let followed = '';
     let alive = true;
+    const COLLAB_PORT = 5282;
+    const COLLAB_MIRROR = `${PROJECTS_DIR}/_online-collab.json`;
+    let collabRemote = null;
+    let collabHostLabel = '';
     const normPath = (p) => String(p || '').replace(/\//g, '\\').replace(/\\+$/g, '').toLowerCase();
+    const collabBase = (host) => {
+      const raw = String(host || '').trim();
+      if (!raw) return '';
+      if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, '');
+      const cleaned = raw.replace(/^\/+|\/+$/g, '');
+      if (!cleaned) return '';
+      if (/:\d+$/.test(cleaned)) return `http://${cleaned}`;
+      return `http://${cleaned}:${COLLAB_PORT}`;
+    };
+    const publishCollabStatus = (extra = {}) => {
+      api.bus.emit('collab:status', {
+        connected: !!collabRemote,
+        host: collabHostLabel || '',
+        url: collabRemote || '',
+        port: COLLAB_PORT,
+        ...extra,
+      });
+    };
+    async function publishActiveProject() {
+      if (collabRemote) return;
+      try {
+        await api.host.fs.write('Storage/collab-active.json', JSON.stringify({
+          path: filePath || null,
+          at: Date.now(),
+        }));
+      } catch (err) { api.log(err); }
+    }
 
     function scheduleShare(commit) {
       if (!alive || !filePath) return;
@@ -121,6 +152,7 @@ export default {
 
     async function flushShare(commit) {
       if (!alive || !filePath) return false;
+      if (collabRemote) return flushShareRemote(commit);
       const shot = snap(doc);
       if (!commit && shot === lastShared) return true;
       let remote = null;
@@ -160,6 +192,57 @@ export default {
       return true;
     }
 
+    async function flushShareRemote(commit) {
+      if (!alive || !filePath || !collabRemote) return false;
+      const shot = snap(doc);
+      if (!commit && shot === lastShared) return true;
+      let remote = null;
+      let remoteRev = revision;
+      try {
+        const res = await fetch(`${collabRemote}/collab/project`);
+        if (res.ok) {
+          remote = await res.json();
+          remoteRev = Number(remote?.revision) || 0;
+        }
+      } catch { /* host briefly unreachable */ }
+      if (!alive) return false;
+      if (remote && remoteRev > revision) {
+        const next = adopt(remote);
+        if (next && snap(next) !== shot) {
+          takeShared(next, remoteRev, !!remote.live);
+          return true;
+        }
+      }
+      const nextRev = commit ? Math.max(revision, remoteRev) + 1 : Math.max(revision, remoteRev);
+      const body = JSON.stringify({ ...doc, revision: nextRev, live: !commit }, null, 2);
+      try {
+        await api.host.fs.write(filePath, body);
+        const put = await fetch(`${collabRemote}/collab/project`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        if (!put.ok) {
+          if (put.status === 409) {
+            await pullSharedRemote();
+            return false;
+          }
+          const errText = await put.text().catch(() => '');
+          api.log(errText || `Collab put failed (${put.status})`);
+          return false;
+        }
+      } catch (err) {
+        api.log(err);
+        return false;
+      }
+      if (!alive) return false;
+      revision = nextRev;
+      lastShared = shot;
+      saved = shot;
+      if (commit) previewing = false;
+      return true;
+    }
+
     function takeShared(next, rev, live) {
       const shot = snap(next);
       revision = Math.max(revision, rev);
@@ -185,6 +268,7 @@ export default {
 
     async function pullShared() {
       if (!alive || !filePath || shareTimer || pendingCommit || previewing) return;
+      if (collabRemote) return pullSharedRemote();
       let raw;
       try { raw = JSON.parse(await api.host.fs.read(filePath)); }
       catch { return; }
@@ -195,6 +279,25 @@ export default {
       if (rev < revision) return;
       if (rev === revision && snap(next) === snap(doc)) return;
       takeShared(next, rev, rev === revision || !!raw.live);
+    }
+
+    async function pullSharedRemote() {
+      if (!alive || !collabRemote || shareTimer || pendingCommit || previewing) return;
+      let raw;
+      try {
+        const res = await fetch(`${collabRemote}/collab/project`);
+        if (!res.ok) return;
+        raw = await res.json();
+      } catch { return; }
+      if (!alive) return;
+      const next = adopt(raw);
+      if (!next) return;
+      const rev = Number(raw.revision) || 0;
+      if (rev < revision) return;
+      if (rev === revision && snap(next) === snap(doc)) return;
+      takeShared(next, rev, rev === revision || !!raw.live);
+      try { await api.host.fs.write(filePath || COLLAB_MIRROR, JSON.stringify({ ...raw }, null, 2)); }
+      catch { /* mirror is best-effort */ }
     }
 
     async function followFile(path) {
@@ -317,6 +420,13 @@ export default {
       return best;
     }
     async function leavePresence() {
+      if (collabRemote) {
+        presenceFile = '';
+        try {
+          await fetch(`${collabRemote}/collab/session/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+        } catch { /* host offline */ }
+        return;
+      }
       const file = presenceFile;
       presenceFile = '';
       if (!file) return;
@@ -390,11 +500,16 @@ export default {
       }
       filePath = path;
       publishChat(true);
+      publishActiveProject();
     }
     async function writePresence() {
       if (!alive) return;
       const epoch = presenceEpoch;
       const stale = () => !alive || epoch !== presenceEpoch;
+      if (collabRemote) {
+        await writePresenceRemote(stale);
+        return;
+      }
       if (!filePath) {
         // During hot-reload boot we have no path yet; do not wipe sessions or
         // remote avatars. newProject sets presenceReady and clears for real.
@@ -557,6 +672,207 @@ export default {
         api.log(err);
       }
     }
+
+    async function writePresenceRemote(stale) {
+      if (!collabRemote) return;
+      if (!filePath) {
+        if (!presenceReady) return;
+        await leavePresence();
+        if (stale()) return;
+        publishUsers(sessionMode === 'edit' ? 1 : 0, sessionMode === 'live' ? 1 : 0);
+        publishLocks([]);
+        lastPeople = [];
+        window.__gwLastPeople = lastPeople;
+        api.bus.emit('project:presence', []);
+        return;
+      }
+      const now = Date.now();
+      let writePosition = pose.position;
+      let writeForward = pose.forward;
+      const payload = {
+        name: profile.name,
+        color: profile.color,
+        mode: sessionMode,
+        position: writePosition,
+        forward: writeForward,
+        pointer: isAfk(pose.activeAt, now) ? null : pose.pointer,
+        activeAt: pose.activeAt,
+        selection: isAfk(pose.activeAt, now) || sessionMode === 'live' ? [] : mySelection,
+        chat: mergeChat([lastMerged, pendingChat]),
+      };
+      try {
+        const res = await fetch(`${collabRemote}/collab/session/${encodeURIComponent(sessionId)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          if (res.status === 404) publishCollabStatus({ error: 'Host has no project open.' });
+          return;
+        }
+        if (stale()) return;
+        const data = await res.json();
+        if (stale()) return;
+        const people = [];
+        const chatLists = [lastMerged, pendingChat];
+        for (const entry of (Array.isArray(data.people) ? data.people : [])) {
+          if (!entry || entry.id === sessionId) continue;
+          const color = typeof entry.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(entry.color)
+            ? entry.color.toLowerCase()
+            : '#5b9dff';
+          const name = typeof entry.name === 'string' && entry.name.trim()
+            ? entry.name.trim().slice(0, 32)
+            : 'User';
+          const theirMode = entry.mode === 'live' ? 'live' : 'edit';
+          if (Array.isArray(entry.chat)) {
+            const bucket = [];
+            for (let i = 0; i < entry.chat.length; i++) {
+              const msg = normalizeChatItem(entry.chat[i], `${entry.id}-${i}`, name, color, entry.id);
+              if (msg) bucket.push(msg);
+            }
+            chatLists.push(bucket);
+          }
+          const activeAt = Number.isFinite(entry.activeAt) ? entry.activeAt : now;
+          const afk = isAfk(activeAt, now);
+          people.push({
+            id: entry.id,
+            name,
+            color,
+            mode: theirMode,
+            position: vec3(entry.position, null),
+            forward: vec3(entry.forward, [0, 0, -1]),
+            pointer: afk ? null : vec3(entry.pointer, null),
+            activeAt,
+            afk,
+            selection: afk || theirMode === 'live' ? [] : normalizeClaims(entry.selection),
+          });
+        }
+        if (Array.isArray(data.chat)) chatLists.push(data.chat.map((item, i) => normalizeChatItem(item, `host-${i}`, 'User', '#5b9dff', '')).filter(Boolean));
+        lastMerged = mergeChat(chatLists);
+        pendingChat = [];
+        publishChat();
+        presenceFile = `remote:${sessionId}`;
+        let editCount = sessionMode === 'edit' ? 1 : 0;
+        let liveCount = sessionMode === 'live' ? 1 : 0;
+        for (const person of people) {
+          if (person.mode === 'live') liveCount += 1;
+          else editCount += 1;
+        }
+        publishUsers(editCount, liveCount);
+        const ranked = rankClaims(people.filter((person) => person.mode !== 'live'));
+        for (const person of people) {
+          person.selection = (person.selection || []).filter((claim) => ranked.get(claim.id)?.session === person.id);
+        }
+        const locks = [];
+        for (const [id, claim] of ranked) {
+          if (claim.session !== sessionId) locks.push(id);
+        }
+        publishLocks(locks);
+        lastPeople = people.filter((person) => person.position);
+        window.__gwLastPeople = lastPeople;
+        api.bus.emit('project:presence', lastPeople);
+        const remoteRev = Number(data.revision) || 0;
+        if (remoteRev > revision) enqueue(() => pullSharedRemote());
+      } catch (err) {
+        api.log(err);
+      }
+    }
+
+    async function connectCollab(hostInput) {
+      const base = collabBase(hostInput);
+      if (!base) {
+        publishCollabStatus({ error: 'Enter a host IP address.' });
+        return false;
+      }
+      publishCollabStatus({ connecting: true, error: '', host: hostInput });
+      let info;
+      try {
+        const res = await fetch(`${base}/collab/info`);
+        if (!res.ok) throw new Error(`Could not reach ${base}`);
+        info = await res.json();
+      } catch (err) {
+        publishCollabStatus({ error: err?.message || 'Could not reach that host.' });
+        return false;
+      }
+      if (!info?.ok) {
+        publishCollabStatus({ error: 'That host is not running collaboration.' });
+        return false;
+      }
+      let raw;
+      try {
+        const res = await fetch(`${base}/collab/project`);
+        if (!res.ok) {
+          const msg = res.status === 404 ? 'Host has no project open yet.' : `Host project failed (${res.status}).`;
+          publishCollabStatus({ error: msg });
+          return false;
+        }
+        raw = await res.json();
+      } catch (err) {
+        publishCollabStatus({ error: err?.message || 'Could not download the project.' });
+        return false;
+      }
+      const next = adopt(raw);
+      if (!next) {
+        publishCollabStatus({ error: 'Host sent an invalid project.' });
+        return false;
+      }
+      await leavePresence();
+      collabRemote = base;
+      collabHostLabel = String(hostInput || '').trim() || base;
+      try { localStorage.setItem('gw-collab-host', collabHostLabel); } catch { /* private mode */ }
+      doc = next;
+      revision = Number(raw.revision) || 0;
+      lastShared = snap(doc);
+      saved = lastShared;
+      previewing = false;
+      pendingCommit = false;
+      presenceEpoch += 1;
+      setFilePath(COLLAB_MIRROR);
+      try {
+        await ensureProjectsDir();
+        await api.host.fs.write(COLLAB_MIRROR, JSON.stringify({ ...raw }, null, 2));
+      } catch (err) { api.log(err); }
+      followFile('');
+      resetHistory();
+      presenceReady = true;
+      presenceTick();
+      publish();
+      const title = (info.project && String(info.project)) || 'Online';
+      await api.host.window.title(`${title} (online)`);
+      publishCollabStatus({ error: '', connecting: false });
+      return true;
+    }
+
+    async function disconnectCollab() {
+      if (!collabRemote) {
+        publishCollabStatus();
+        return;
+      }
+      await leavePresence();
+      collabRemote = null;
+      collabHostLabel = '';
+      presenceEpoch += 1;
+      presenceFile = '';
+      publishActiveProject();
+      presenceTick();
+      publishCollabStatus();
+      const name = (filePath || '').split(/[/\\]/).pop().replace(/\.json$/i, '');
+      await api.host.window.title(name || 'Game');
+    }
+
+    api.bus.on('collab:connect', (payload) => {
+      const host = typeof payload === 'string' ? payload : payload?.host;
+      connectCollab(host).catch((err) => {
+        api.log(err);
+        publishCollabStatus({ error: err?.message || 'Connect failed.', connecting: false });
+      });
+    });
+    api.bus.on('collab:disconnect', () => {
+      disconnectCollab().catch((err) => api.log(err));
+    });
+    api.bus.on('collab:request', () => publishCollabStatus());
+    publishCollabStatus();
+
     api.bus.on('mode:set', (mode) => setSessionMode(mode));
     // Belt-and-suspenders: Stop must clear Live even if the viewport skipped
     // enterLiveMode (hot reload left project on live while playMode reset).

@@ -38,6 +38,7 @@ static class Program
         var form = new MainForm();
         Host.Form = form;
         McpHost.Start();
+        CollabHost.Start();
         Application.Run(form);
     }
 

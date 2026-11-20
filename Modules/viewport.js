@@ -18,7 +18,7 @@ import {
   eraseEdges,
   hitSolidEdge,
   scaleSolid,
-} from '/Assets/lib/solid.js?v=10';
+} from '/Assets/lib/solid.js?v=11';
 import { createPostStack } from '/Assets/lib/viewport-gfx.js?v=6';
 import * as CANNON from '/Assets/lib/cannon-es.js';
 
@@ -761,7 +761,11 @@ export default {
           color,
           transparent: true,
           opacity: hover ? 0.08 : 0.18,
+          depthTest: true,
           depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1,
           toneMapped: false,
           side: THREE.DoubleSide,
         }),
@@ -772,8 +776,11 @@ export default {
         color,
         transparent: true,
         opacity: hover ? 0.05 : 0.1,
-        depthTest: false,
+        depthTest: true,
         depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
         toneMapped: false,
         side: THREE.BackSide,
       });
@@ -792,7 +799,8 @@ export default {
         new THREE.LineBasicMaterial({
           color,
           toneMapped: false,
-          depthTest: false,
+          depthTest: true,
+          depthWrite: false,
           transparent: true,
           opacity: hover ? 0.85 : 1,
         }),
@@ -1567,13 +1575,20 @@ export default {
     let presenceRaw = [];
     let presence = [];
 
-    // S&box-style rigidbodies for Live Mode (MotionEnabled + gravity/mass/damping).
+    // S&box-style rigidbodies for Live Mode:
+    // - Statics: exact primitives, or triangle mesh for edited solids (PhysicsMesh).
+    // - Dynamics: convex primitives / surface sphere compounds (PhysicsHull-like),
+    //   because cannon-es only resolves Trimesh contacts against Sphere/Plane.
     let physWorld = null;
     const physBodies = new Map();
     const physMat = new CANNON.Material('part');
     const physContact = new CANNON.ContactMaterial(physMat, physMat, {
-      friction: 0.45,
-      restitution: 0.05,
+      friction: 0.55,
+      restitution: 0.02,
+      contactEquationStiffness: 1e7,
+      contactEquationRelaxation: 3,
+      frictionEquationStiffness: 1e7,
+      frictionEquationRelaxation: 3,
     });
 
     function autoMass(model) {
@@ -1591,9 +1606,6 @@ export default {
       );
     }
 
-    // Edited SketchUp solids → Trimesh (exact surface + holes).
-    // cannon-es only resolves Trimesh vs Sphere/Plane — never Box/Convex — so
-    // dynamic bodies use a sphere lattice that can hit those meshes accurately.
     function solidToTrimesh(solid) {
       if (!solid?.vertices?.length || !solid?.faces?.length) return null;
       const { positions } = solidToGeometry(solid);
@@ -1616,55 +1628,162 @@ export default {
       return new CANNON.Vec3(c.x, c.y, c.z);
     }
 
-    // Fill the AABB with overlapping spheres so Trimesh contacts are continuous
-    // (old corner probes left gaps and Boxes fell through sketch solids).
-    function fillSphereLattice(body, half, origin) {
-      const ox = origin?.x || 0;
-      const oy = origin?.y || 0;
-      const oz = origin?.z || 0;
-      const hx = Math.max(0.05, half.x);
-      const hy = Math.max(0.05, half.y);
-      const hz = Math.max(0.05, half.z);
-      const minH = Math.min(hx, hy, hz);
-      let r = Math.max(0.1, Math.min(0.55, minH * 0.5));
-      const axis = (extent, rad) => {
-        const inner = Math.max(0, extent - rad);
-        if (inner < 1e-4) return { n: 1, coords: [0] };
-        const n = Math.max(1, Math.ceil((2 * inner) / (rad * 1.55)) + 1);
-        const d = n > 1 ? (2 * inner) / (n - 1) : 0;
-        const coords = [];
-        for (let i = 0; i < n; i++) coords.push(-inner + i * d);
-        return { n, coords };
-      };
-      let gx = axis(hx, r);
-      let gy = axis(hy, r);
-      let gz = axis(hz, r);
-      let guard = 0;
-      while (gx.n * gy.n * gz.n > 48 && guard < 12) {
-        r *= 1.18;
-        gx = axis(hx, r);
-        gy = axis(hy, r);
-        gz = axis(hz, r);
-        guard += 1;
+    function solidHasHoles(solid) {
+      return !!solid?.faces?.some((face) => face.holes?.length);
+    }
+
+    /** Convex hull collider from a hole-free solid (S&box PhysicsHull). */
+    function solidToConvex(solid) {
+      if (!solid?.vertices?.length || !solid?.faces?.length || solidHasHoles(solid)) return null;
+      const vertices = solid.vertices.map((v) => new CANNON.Vec3(v[0], v[1], v[2]));
+      const faces = [];
+      for (const face of solid.faces) {
+        if (!face?.verts || face.verts.length < 3) continue;
+        if (face.wallOf && face.verts.length === 4) {
+          faces.push([face.verts[0], face.verts[1], face.verts[2]]);
+          faces.push([face.verts[0], face.verts[2], face.verts[3]]);
+          continue;
+        }
+        for (let i = 1; i < face.verts.length - 1; i++) {
+          faces.push([face.verts[0], face.verts[i], face.verts[i + 1]]);
+        }
       }
-      const rad = Math.max(0.08, Math.min(r, minH));
-      for (const x of gx.coords) {
-        for (const y of gy.coords) {
-          for (const z of gz.coords) {
-            body.addShape(new CANNON.Sphere(rad), new CANNON.Vec3(ox + x, oy + y, oz + z));
+      if (faces.length < 4) return null;
+      try {
+        return new CANNON.ConvexPolyhedron({ vertices, faces });
+      } catch {
+        return null;
+      }
+    }
+
+    /** Exact primitive collider matching the part shape (S&box PhysicsShape*). */
+    function primitiveShapeForModel(model) {
+      const shape = model?.userData?.shape || 'block';
+      const half = boxHalfFromModel(model);
+      const origin = collisionCenterOffset(model);
+      if (shape === 'sphere') {
+        const r = Math.max(half.x, half.y, half.z);
+        return { shape: new CANNON.Sphere(r), offset: origin };
+      }
+      if (shape === 'cylinder') {
+        // Cannon Cylinder is Y-up with radius at XZ and height along Y.
+        const radius = Math.max(half.x, half.z);
+        return {
+          shape: new CANNON.Cylinder(radius, radius, Math.max(0.1, half.y * 2), 16),
+          offset: origin,
+        };
+      }
+      // Wedge/corner without an authored solid approximate as a box; solids use convex/mesh paths.
+      return { shape: new CANNON.Box(half), offset: origin };
+    }
+
+    /**
+     * Surface-fitted sphere compound (S&box-like hull fidelity under cannon limits).
+     * Samples solid vertices, edge midpoints, and face centroids so contacts
+     * follow the real mesh instead of a coarse AABB blob.
+     */
+    function fillSurfaceSpheres(body, model, solid) {
+      const half = boxHalfFromModel(model);
+      const origin = collisionCenterOffset(model) || new CANNON.Vec3(0, 0, 0);
+      const samples = [];
+      const pushSample = (x, y, z) => {
+        samples.push([x, y, z]);
+      };
+
+      if (solid?.vertices?.length) {
+        for (const v of solid.vertices) pushSample(v[0], v[1], v[2]);
+        for (const face of solid.faces || []) {
+          if (!face?.verts?.length) continue;
+          let cx = 0;
+          let cy = 0;
+          let cz = 0;
+          for (const index of face.verts) {
+            const v = solid.vertices[index];
+            cx += v[0];
+            cy += v[1];
+            cz += v[2];
+          }
+          const n = face.verts.length;
+          pushSample(cx / n, cy / n, cz / n);
+          for (let i = 0; i < face.verts.length; i++) {
+            const a = solid.vertices[face.verts[i]];
+            const b = solid.vertices[face.verts[(i + 1) % face.verts.length]];
+            pushSample((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5);
+          }
+        }
+      } else {
+        // Primitive: face centers + edge midpoints + corners of the AABB.
+        const hx = half.x;
+        const hy = half.y;
+        const hz = half.z;
+        for (const sx of [-1, 1]) {
+          for (const sy of [-1, 1]) {
+            for (const sz of [-1, 1]) pushSample(sx * hx, sy * hy, sz * hz);
+          }
+        }
+        for (const sx of [-1, 0, 1]) {
+          for (const sy of [-1, 0, 1]) {
+            for (const sz of [-1, 0, 1]) {
+              if (sx === 0 && sy === 0 && sz === 0) continue;
+              const count = (sx ? 1 : 0) + (sy ? 1 : 0) + (sz ? 1 : 0);
+              if (count === 1 || count === 2) pushSample(sx * hx, sy * hy, sz * hz);
+            }
           }
         }
       }
+
+      // Weld duplicates, then pick a sphere radius from local spacing.
+      const welded = [];
+      const weld = Math.max(0.04, Math.min(half.x, half.y, half.z) * 0.18);
+      for (const p of samples) {
+        if (welded.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]) <= weld)) continue;
+        welded.push(p);
+      }
+      let rad = Math.max(0.06, Math.min(0.35, weld * 0.85));
+      // Character-sized parts: prefer a vertical capsule stack for stable walking.
+      const isPawnLike = (model.userData.size?.y || 1) >= (model.userData.size?.x || 1) * 0.9
+        && (model.userData.size?.y || 1) >= (model.userData.size?.z || 1) * 0.9
+        && !solid;
+      if (isPawnLike) {
+        const radius = Math.max(0.15, Math.min(half.x, half.z) * 0.92);
+        const top = half.y - radius;
+        const bot = -half.y + radius;
+        const span = Math.max(0, top - bot);
+        const steps = Math.max(1, Math.ceil(span / (radius * 0.85)));
+        for (let i = 0; i <= steps; i++) {
+          const t = steps === 0 ? 0.5 : i / steps;
+          const y = bot + (top - bot) * t;
+          body.addShape(
+            new CANNON.Sphere(radius),
+            new CANNON.Vec3(origin.x, origin.y + y, origin.z),
+          );
+        }
+        body.userData = { ...(body.userData || {}), sphereCapsule: true };
+        return;
+      }
+
+      const maxSpheres = 160;
+      let list = welded;
+      if (list.length > maxSpheres) {
+        const step = Math.ceil(list.length / maxSpheres);
+        list = list.filter((_, i) => i % step === 0);
+        rad = Math.max(rad, weld * 1.05);
+      }
+      for (const p of list) {
+        body.addShape(
+          new CANNON.Sphere(rad),
+          new CANNON.Vec3(origin.x + p[0], origin.y + p[1], origin.z + p[2]),
+        );
+      }
+      body.userData = { ...(body.userData || {}), surfaceSpheres: true, sphereCount: list.length };
     }
 
     function attachCollisionShapes(body, model) {
       const solid = model?.userData?.solid;
       const dynamic = body.mass > 0 || body.type === CANNON.Body.DYNAMIC;
-      const half = boxHalfFromModel(model);
-      const origin = collisionCenterOffset(model);
+      const shapeName = model?.userData?.shape || 'block';
 
-      // Static sketch meshes: Trimesh only (keeps holes/openings walkable).
-      // Do not also add a Box — that would seal openings against sphere pawns.
+      // Static sketch meshes → triangle mesh (S&box PhysicsMesh). Keeps holes walkable.
       if (!dynamic && solid?.vertices?.length && solid?.faces?.length) {
         const mesh = solidToTrimesh(solid);
         if (mesh) {
@@ -1674,15 +1793,26 @@ export default {
         }
       }
 
-      // Dynamic (and static non-solids): sphere lattice so contacts work against
-      // sketch Trimeshes. Boxes never generate contacts with Trimesh in cannon-es.
-      if (dynamic) {
-        fillSphereLattice(body, half, origin);
-        body.userData = { ...(body.userData || {}), sphereLattice: true };
+      // Static primitives / hole-free solids → exact Box / Sphere / Cylinder / convex hull.
+      if (!dynamic) {
+        if (solid && !solidHasHoles(solid)) {
+          const convex = solidToConvex(solid);
+          if (convex) {
+            body.addShape(convex);
+            body.userData = { ...(body.userData || {}), convexCollider: true };
+            return;
+          }
+        }
+        const prim = primitiveShapeForModel(model);
+        body.addShape(prim.shape, prim.offset || undefined);
+        body.userData = { ...(body.userData || {}), primitiveCollider: shapeName };
         return;
       }
 
-      body.addShape(new CANNON.Box(half), origin || undefined);
+      // Dynamics use surface sphere compounds so they collide with mesh colliders
+      // (cannon-es Trimesh only contacts Sphere/Plane — same constraint as before,
+      // but samples follow the real mesh like an S&box hull approximation).
+      fillSurfaceSpheres(body, model, solid);
     }
 
     function releaseRemoteCollider(avatar) {
@@ -1746,6 +1876,12 @@ export default {
       physWorld.allowSleep = true;
       physWorld.defaultContactMaterial = physContact;
       physWorld.addContactMaterial(physContact);
+      if (physWorld.solver) {
+        physWorld.solver.iterations = 16;
+        physWorld.solver.tolerance = 0.0005;
+      }
+      physWorld.quatNormalizeSkip = 0;
+      physWorld.quatNormalizeFast = false;
       // Live pawn needs a dynamic body so character motion collides with static Parts.
       const pawnKind = findPlayCharacter()?.host?.userData?.kind || null;
       for (const model of models) {
@@ -1826,7 +1962,7 @@ export default {
         // Cancel default gravity then apply scaled gravity (world -60 on Y).
         body.force.y += body.mass * 60 * (1 - scale);
       }
-      physWorld.step(1 / 60, dt, 4);
+      physWorld.step(1 / 60, Math.min(0.05, dt), 6);
       for (const [kind, body] of physBodies) {
         if (!body.mass) continue;
         const model = models.find((item) => item.userData.kind === kind);

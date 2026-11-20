@@ -50,7 +50,16 @@ sealed class HostBridge
 
     public HostBridge()
     {
-        Sync("host.info", _ => new { version = Host.Version, root = Paths.Root, mcp = McpHost.Url, pid = Environment.ProcessId });
+        Sync("host.info", _ => new
+        {
+            version = Host.Version,
+            root = Paths.Root,
+            mcp = McpHost.Url,
+            collab = $"http://127.0.0.1:{CollabHost.Port}/",
+            collabPort = CollabHost.Port,
+            collabRunning = CollabHost.Running,
+            pid = Environment.ProcessId,
+        });
         Sync("host.methods", _ => Methods.ToArray());
 
         // fs (full access; relative paths resolve against the program folder)

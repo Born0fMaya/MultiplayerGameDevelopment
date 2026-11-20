@@ -598,6 +598,7 @@ sealed class MainForm : Form
         });
         Step("remove notifications", () => { foreach (var n in _notifyIcons.ToArray()) { n.Visible = false; n.Dispose(); } });
         try { await McpHost.Stop(1000); } catch { }
+        try { await CollabHost.Stop(1000); } catch { }
         Step("save state", () => { Host.State.Save(); Host.Storage.Flush(); });
         Step("dispose webview", () => _web?.Dispose());
         Step("kill remaining child processes", JobObject.KillDescendants);

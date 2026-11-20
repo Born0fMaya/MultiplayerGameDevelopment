@@ -613,7 +613,7 @@ export default {
     panel.style.cssText = [
       'position:fixed',
       'z-index:40',
-      'width:220px',
+      'width:240px',
       'box-sizing:border-box',
       'padding:12px',
       'flex-direction:column',
@@ -656,12 +656,95 @@ export default {
     colorInput.value = myColor;
     colorInput.style.cssText = 'width:100%;height:32px;padding:0;border:0;background:transparent;cursor:pointer;';
     colorLabel.append(colorInput);
-    panel.append(nameLabel, colorLabel);
+    const ipLabel = addLabel('Host IP');
+    const ipInput = document.createElement('input');
+    ipInput.type = 'text';
+    ipInput.placeholder = '10.0.0.12';
+    ipInput.spellcheck = false;
+    ipInput.autocomplete = 'off';
+    ipInput.style.cssText = fieldStyle;
+    try {
+      const savedHost = localStorage.getItem('gw-collab-host');
+      if (savedHost) ipInput.value = savedHost;
+    } catch { /* private mode */ }
+    ipLabel.append(ipInput);
+    const connectBtn = document.createElement('button');
+    connectBtn.type = 'button';
+    connectBtn.textContent = 'Connect';
+    connectBtn.style.cssText = [
+      'width:100%',
+      'height:30px',
+      'border:1px solid var(--gw-line, rgba(255,255,255,.12))',
+      'border-radius:4px',
+      'background:var(--gw-hover, rgba(255,255,255,.06))',
+      'color:inherit',
+      'font:inherit',
+      'cursor:pointer',
+    ].join(';');
+    const collabStatus = document.createElement('div');
+    collabStatus.style.cssText = 'font-size:11px;line-height:1.35;color:var(--gw-muted, #aeb4bb);min-height:14px;';
+    const yourIp = document.createElement('div');
+    yourIp.style.cssText = 'font-size:11px;line-height:1.35;color:var(--gw-muted, #aeb4bb);word-break:break-all;';
+    yourIp.textContent = 'Your IP: …';
+    let collabConnected = false;
+    let collabBusy = false;
+    const showCollab = (status = {}) => {
+      if ('connected' in status) collabConnected = !!status.connected;
+      const connecting = !!status.connecting;
+      connectBtn.textContent = collabConnected ? 'Disconnect' : (connecting ? 'Connecting…' : 'Connect');
+      connectBtn.disabled = connecting || collabBusy;
+      ipInput.disabled = collabConnected || connecting;
+      if (status.host && !ipInput.value) ipInput.value = status.host;
+      if ('error' in status || 'connected' in status || 'connecting' in status) {
+        if (status.error) collabStatus.textContent = status.error;
+        else if (collabConnected) collabStatus.textContent = `Connected to ${status.host || 'host'}`;
+        else if (connecting) collabStatus.textContent = 'Connecting…';
+        else collabStatus.textContent = 'Open a project, then share your IP with friends.';
+      }
+      if (Array.isArray(status.addresses) && status.addresses.length) {
+        const best = status.addresses.find((ip) => ip && ip !== '127.0.0.1') || status.addresses[0];
+        yourIp.textContent = `Your IP: ${best}${status.port ? `:${status.port}` : ''}`;
+      }
+    };
+    api.bus.on('collab:status', showCollab);
+    api.bus.emit('collab:request');
+    fetch('http://127.0.0.1:5282/collab/info')
+      .then((res) => res.ok ? res.json() : null)
+      .then((info) => {
+        if (!info) return;
+        showCollab({ addresses: info.addresses, port: info.port || 5282 });
+      })
+      .catch(() => { yourIp.textContent = 'Your IP: unavailable'; });
+    connectBtn.addEventListener('click', () => {
+      if (collabBusy) return;
+      if (collabConnected) {
+        api.bus.emit('collab:disconnect');
+        return;
+      }
+      const host = ipInput.value.trim();
+      if (!host) {
+        collabStatus.textContent = 'Enter a host IP address.';
+        ipInput.focus();
+        return;
+      }
+      try { localStorage.setItem('gw-collab-host', host); } catch { /* private mode */ }
+      collabBusy = true;
+      connectBtn.disabled = true;
+      api.bus.emit('collab:connect', { host });
+      setTimeout(() => { collabBusy = false; }, 50);
+    });
+    ipInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        connectBtn.click();
+      }
+    });
+    panel.append(nameLabel, colorLabel, ipLabel, connectBtn, yourIp, collabStatus);
     document.body.append(panel);
     const placePanel = () => {
       const rect = users.getBoundingClientRect();
       panel.style.top = `${rect.bottom + 6}px`;
-      panel.style.left = `${Math.max(8, rect.right - 220)}px`;
+      panel.style.left = `${Math.max(8, rect.right - 240)}px`;
     };
     const setPanel = (open) => {
       panel.hidden = !open;
